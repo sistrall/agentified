@@ -1,0 +1,34 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to GHCR (otherwise dry-run package only)"
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Never publish something the test suite has not seen.
+      - run: make check
+
+      - uses: devcontainers/action@v1
+        with:
+          publish-features: ${{ inputs.publish }}
+          base-path-to-features: ./src
+          generate-docs: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Remember: the resulting GHCR package is private by default. Flip it to
+      # public or consumers get an opaque auth error, not a permissions message.
+      - if: ${{ inputs.publish }}
+        run: echo "::notice::Set the agentified package to public in GHCR settings."

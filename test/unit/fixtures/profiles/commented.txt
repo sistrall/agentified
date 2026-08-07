@@ -1,0 +1,6 @@
+# a leading comment
+
+kept.example.com
+   .also-kept.example.com
+
+# trailing comment

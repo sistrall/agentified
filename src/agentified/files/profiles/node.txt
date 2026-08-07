@@ -1,0 +1,9 @@
+# source: empirical - test/agentified/toolchains.sh runs a real `npm install`
+# verified: 2026-08-07 (toolchains scenario: a real install refused nothing)
+
+registry.npmjs.org
+.npmjs.org
+registry.yarnpkg.com
+.yarnpkg.com
+nodejs.org
+.nodejs.org

@@ -1,0 +1,2 @@
+beta.example.com
+shared.example.com

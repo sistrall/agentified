@@ -1,0 +1,2 @@
+alpha.example.com
+shared.example.com

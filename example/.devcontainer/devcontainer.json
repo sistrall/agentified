@@ -1,0 +1,31 @@
+// Local development harness for agentified itself.
+//
+// The Feature is referenced as "./agentified", a folder that `make up` copies
+// in from src/ and .gitignore hides. That indirection is not a style choice:
+// the devcontainer CLI requires a local Feature path to resolve *inside*
+// .devcontainer/, and it cannot read one through a symlink either. A real copy,
+// re-synced on every `make up`, is the arrangement that actually works.
+//
+// A real consumer writes the published reference instead:
+//   "ghcr.io/sistrall/agentified/agentified:0": { ... }
+{
+  "name": "agentified example",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "features": {
+    "./agentified": {
+      "agents": "claude,pi",
+      "profiles": "base,claude,pi,editor,ruby",
+      "allow": "gems.mycompany.internal"
+    }
+  },
+
+  // Greet every new terminal with what to try.
+  //
+  // This appends a *guarded source* of welcome.sh rather than its contents, so
+  // `rm .devcontainer/welcome.sh` removes the banner from the next terminal
+  // with no rebuild and no leftover to clean up. postCreate runs once per
+  // container, so the line does not accumulate across restarts.
+  "postCreateCommand": "echo '[ -r ${containerWorkspaceFolder}/.devcontainer/welcome.sh ] && . ${containerWorkspaceFolder}/.devcontainer/welcome.sh' >> ~/.bashrc",
+
+  "remoteUser": "vscode"
+}

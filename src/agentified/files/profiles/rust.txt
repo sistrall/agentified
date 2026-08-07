@@ -1,0 +1,9 @@
+# source: none published; derived from cargo's documented registry hosts
+# verified: unverified (no toolchain check yet)
+
+crates.io
+static.crates.io
+index.crates.io
+.crates.io
+static.rust-lang.org
+sh.rustup.rs

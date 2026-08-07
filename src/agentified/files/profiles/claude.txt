@@ -1,0 +1,50 @@
+# source: https://code.claude.com/docs/en/network-config ("Network access requirements")
+# verified: 2026-08-07
+#
+# Claude Code. If it cannot start, check that page against this file before
+# guessing — the list does change between versions.
+
+# --- authentication -------------------------------------------------------
+# Sign-in reaches all three. platform.claude.com is not optional even for a
+# claude.ai account: OAuth token exchange, refresh and revocation go there.
+claude.ai
+claude.com
+platform.claude.com
+
+# --- the API --------------------------------------------------------------
+# Model requests, feature flags, and the WebFetch domain safety check.
+api.anthropic.com
+
+# --- updates and plugins --------------------------------------------------
+downloads.claude.ai
+registry.npmjs.org
+
+# --- MCP connectors -------------------------------------------------------
+# Connectors from claude.ai are enabled by default, and all of their traffic is
+# routed through this host. Blocking it is how MCP servers "mysteriously stop
+# working". Disable them with ENABLE_CLAUDEAI_MCP_SERVERS=false if you would
+# rather drop this line.
+mcp-proxy.anthropic.com
+
+# --- documentation lookups ------------------------------------------------
+# Used by the built-in claude-code-guide agent. Blocking this only degrades
+# documentation lookups; nothing else breaks.
+code.claude.com
+
+# --- deliberately NOT included --------------------------------------------
+# Add these to the Feature's `allow` option if you want them.
+#
+#   http-intake.logs.us5.datadoghq.com   operational telemetry
+#   browser-intake-us5-datadoghq.com     error reporting
+#     Both are optional by Anthropic's own documentation, and a boundary whose
+#     job is limiting where data can go should not ship them switched on.
+#     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 turns both off at the source.
+#
+#   storage.googleapis.com               plugin metadata, artifact uploads
+#     Allowing this permits *every* bucket on Google Cloud Storage, which is a
+#     large hole in an allowlist meant to limit exfiltration. Artifact uploads
+#     fall back to api.anthropic.com when it is blocked, and the cost is
+#     install counts missing from /plugin.
+#
+#   formulae.brew.sh                     Homebrew update checks (we install via npm)
+#   bridge.claudeusercontent.com         Claude in Chrome (not applicable in a container)

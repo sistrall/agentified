@@ -1,0 +1,13 @@
+# source: none published
+# verified: 2026-08-07 (partial: pi starts and reaches pi.dev; its authenticated traffic is unexercised)
+#
+# These are the model providers Pi can be pointed at, plus its own updates.
+# Nobody has checked this against a source of truth; if Pi fails to start,
+# `sudo agentified denied` will tell you what it actually wanted.
+
+api.anthropic.com
+api.openai.com
+generativelanguage.googleapis.com
+registry.npmjs.org
+pi.dev
+.pi.dev

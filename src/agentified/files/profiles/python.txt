@@ -1,0 +1,7 @@
+# source: empirical - test/agentified/toolchains.sh runs a real `pip download`
+# verified: 2026-08-07 (toolchains scenario: a real install refused nothing)
+
+pypi.org
+files.pythonhosted.org
+.pythonhosted.org
+pypi.python.org

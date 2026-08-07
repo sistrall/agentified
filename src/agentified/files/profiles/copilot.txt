@@ -1,0 +1,43 @@
+# source: https://docs.github.com/en/copilot/reference/allowlist-reference
+# verified: 2026-08-07
+#
+# GitHub Copilot in the editor. Not included in the `editor` profile: Copilot
+# sends your code to GitHub for completions, which is a decision to make on
+# purpose rather than inherit.
+#
+# Note the allowlist reference is written in terms of URLs with paths. We can
+# only express hostnames (see 0003-filter-by-name-not-by-decrypting), so entries
+# like https://api.github.com/copilot_internal/* become the whole host — which
+# `base` already permits.
+
+# --- completions and chat -------------------------------------------------
+# The reference lists *.githubcopilot.com plus per-plan subdomains
+# (individual/business/enterprise); the leading dot covers all of them.
+.githubcopilot.com
+
+# --- suggestion plumbing --------------------------------------------------
+copilot-proxy.githubusercontent.com
+origin-tracker.githubusercontent.com
+
+# --- experimentation ------------------------------------------------------
+# Feature assignment. Without it Copilot works but may not match what your
+# plan advertises.
+default.exp-tas.com
+
+# --- deliberately NOT included --------------------------------------------
+# Add via the Feature's `allow` option if you need them.
+#
+#   collector.github.com                    analytics
+#   copilot-telemetry.githubusercontent.com telemetry
+#     Optional. A boundary meant to limit where data goes should not ship
+#     telemetry switched on by default.
+#
+#   copilot-reports.github.com              usage reports (admin feature)
+#   *.b01.azurefd.net                       usage report fallback
+#   *.blob.core.windows.net                 usage report fallback — this is all
+#                                           of Azure Blob Storage, so it is a
+#                                           very large hole; add only if needed.
+#   ai.azure.com, *.api.azureml.ms          voice features
+#
+# Sign-in also needs github.com and *.githubusercontent.com, which the `base`
+# profile already covers. Use `base,copilot` together.

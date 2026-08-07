@@ -1,0 +1,101 @@
+{
+  "id": "agentified",
+  "version": "0.1.0",
+  "name": "Agentified (sandboxed coding agents)",
+  "description": "Installs Claude Code and/or Pi behind a default-deny egress boundary (CONNECT-allowlisting proxy + iptables backstop).",
+  "documentationURL": "https://github.com/sistrall/agentified",
+  "licenseURL": "https://github.com/sistrall/agentified/blob/main/LICENSE",
+  "keywords": ["claude", "pi", "agent", "sandbox", "firewall", "proxy"],
+
+  "options": {
+    "agents": {
+      "type": "string",
+      "default": "claude",
+      "description": "Comma-separated agents to install: claude, pi, none."
+    },
+    "profiles": {
+      "type": "string",
+      "default": "base,editor",
+      "description": "Allowlist profiles to compose: base, claude, pi, editor, ruby, node, python, rust, go. Unknown names fail the build."
+    },
+    "allow": {
+      "type": "string",
+      "default": "",
+      "description": "Extra allowed hosts, comma-separated. A leading dot means 'and all subdomains'."
+    },
+    "extraCidrs": {
+      "type": "string",
+      "default": "",
+      "description": "CIDRs reachable directly, bypassing the proxy (e.g. compose sidecars)."
+    },
+    "dnsMode": {
+      "type": "string",
+      "enum": ["resolver-only", "blocked", "open"],
+      "default": "resolver-only",
+      "description": "resolver-only: only the nameservers in /etc/resolv.conf are reachable. blocked: no direct DNS at all. open: any resolver."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["enforce", "learn", "off"],
+      "default": "enforce",
+      "description": "enforce: proxy allowlist + firewall. learn: firewall on, proxy logs but permits everything. off: neither."
+    },
+    "proxyPort": {
+      "type": "string",
+      "default": "3128",
+      "description": "Loopback port the allowlisting proxy listens on."
+    },
+    "allowIpv6": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow the proxy user to egress over IPv6. Everything else stays closed either way."
+    },
+    "agentPolicy": {
+      "type": "string",
+      "enum": ["strict", "notes-only", "off"],
+      "default": "strict",
+      "description": "Tell the agent the boundary is deliberate. strict: also deny it sudo and firewall commands via Claude Code managed settings. notes-only: advisory text only. off: neither. See docs/adr/0019."
+    },
+    "installNodeIfMissing": {
+      "type": "boolean",
+      "default": true,
+      "description": "Install a private Node runtime under /opt/agentified when the image has none new enough for the agents."
+    }
+  },
+
+  // NET_ADMIN alone: it is what iptables-restore needs. NET_RAW is already
+  // in the container runtime's default set, so adding it changed nothing.
+  "capAdd": ["NET_ADMIN"],
+
+  "mounts": [
+    {
+      "source": "agentified-state-${devcontainerId}",
+      "target": "/agent-state",
+      "type": "volume"
+    }
+  ],
+
+  // http_proxy and friends are deliberately NOT set here. containerEnv is
+  // emitted as ENV in the generated Dockerfile, *above* the feature install
+  // layers, so pinning the proxy here points every build-time apt/curl/npm —
+  // ours and that of any feature installed afterwards — at a port that does not
+  // exist until runtime. They are written to /etc/profile.d instead and picked
+  // up at runtime through userEnvProbe.
+  // See docs/adr/0009-keep-proxy-settings-out-of-containerenv.md.
+  "containerEnv": {
+    "AGENTIFIED_HOME": "/usr/local/share/agentified",
+    "AGENTIFIED_STATE": "/agent-state",
+    "CLAUDE_CONFIG_DIR": "/agent-state/claude",
+
+    "NO_PROXY": "localhost,127.0.0.1,::1,.local,.internal",
+    "no_proxy": "localhost,127.0.0.1,::1,.local,.internal"
+  },
+
+  "onCreateCommand": "sudo /usr/local/bin/agentified start --proxy-only",
+  "postStartCommand": "sudo /usr/local/bin/agentified start",
+
+  "installsAfter": [
+    "ghcr.io/devcontainers/features/common-utils",
+    "ghcr.io/devcontainers/features/node"
+  ]
+}

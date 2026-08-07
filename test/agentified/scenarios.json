@@ -1,0 +1,112 @@
+{
+  "claude_defaults": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "claude",
+        "profiles": "base,claude,editor"
+      }
+    }
+  },
+
+  "claude_and_pi": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "claude,pi",
+        "profiles": "base,claude,pi,editor"
+      }
+    }
+  },
+
+  "boundary_only": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "none",
+        "profiles": "base",
+        "allow": "rubygems.org,.example.org"
+      }
+    }
+  },
+
+  "learn_mode": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "none",
+        "profiles": "base",
+        "mode": "learn"
+      }
+    }
+  },
+
+  "off_mode": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "none",
+        "profiles": "base",
+        "mode": "off"
+      }
+    }
+  },
+
+  "dns_blocked_and_cidrs": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "none",
+        "profiles": "base",
+        "dnsMode": "blocked",
+        "extraCidrs": "10.99.0.0/16"
+      }
+    }
+  },
+
+  "toolchains": {
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "remoteUser": "vscode",
+    "features": {
+      "ghcr.io/devcontainers/features/node:1": {},
+      "ghcr.io/devcontainers/features/python:1": {},
+      "ghcr.io/devcontainers/features/ruby:1": {},
+      "agentified": {
+        "agents": "none",
+        "profiles": "base,node,python,ruby"
+      }
+    }
+  },
+
+  "ubuntu_base": {
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+    "remoteUser": "vscode",
+    "features": {
+      "agentified": {
+        "agents": "none",
+        "profiles": "base,editor"
+      }
+    }
+  },
+
+  "root_remote_user": {
+    "image": "debian:bookworm",
+    "remoteUser": "root",
+    "features": {
+      "ghcr.io/devcontainers/features/common-utils:2": {
+        "installZsh": false,
+        "username": "none"
+      },
+      "agentified": {
+        "agents": "none",
+        "profiles": "base"
+      }
+    }
+  }
+}

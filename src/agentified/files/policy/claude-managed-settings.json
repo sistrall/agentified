@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(sudo)",
+      "Bash(su *)",
+      "Bash(su)",
+      "Bash(iptables *)",
+      "Bash(ip6tables *)",
+      "Bash(iptables-restore *)",
+      "Bash(ip6tables-restore *)",
+      "Bash(iptables-legacy *)",
+      "Bash(nft *)",
+      "Bash(tinyproxy *)",
+      "Bash(agentified stop)",
+      "Bash(agentified start *)",
+      "Bash(agentified start)"
+    ],
+    "disableBypassPermissionsMode": "disable"
+  }
+}

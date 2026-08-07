@@ -1,0 +1,7 @@
+# source: empirical - test/agentified/toolchains.sh runs a real `gem install`
+# verified: 2026-08-07 (toolchains scenario: a real install refused nothing)
+
+rubygems.org
+.rubygems.org
+index.rubygems.org
+bundler.rubygems.org

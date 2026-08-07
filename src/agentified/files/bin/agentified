@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# agentified :: runtime CLI.
+#
+# Root-owned, 0755, reachable from the workspace user through a narrow sudoers
+# grant. Every subcommand is idempotent so `start` is safe on every container
+# start, and so `postStartCommand` can re-run it after a plain docker restart.
+set -euo pipefail
+
+AG_HOME="${AGENTIFIED_HOME:-/usr/local/share/agentified}"
+AG_ETC="${AGENTIFIED_ETC:-/etc/agentified}"
+AG_RUN="${AGENTIFIED_RUN:-/run/agentified}"
+AG_LOGDIR="${AGENTIFIED_LOGDIR:-/var/log/agentified}"
+
+# shellcheck source=../lib/common.sh
+. "$AG_HOME/lib/common.sh"
+# shellcheck source=../lib/allowlist.sh
+. "$AG_HOME/lib/allowlist.sh"
+# shellcheck source=../lib/firewall.sh
+. "$AG_HOME/lib/firewall.sh"
+# shellcheck source=../lib/proxy.sh
+. "$AG_HOME/lib/proxy.sh"
+# shellcheck source=../lib/state.sh
+. "$AG_HOME/lib/state.sh"
+
+FILTER="$AG_ETC/allowlist.filter"
+CONF="$AG_ETC/tinyproxy.conf"
+LOG="$AG_LOGDIR/proxy.log"
+PIDFILE="$AG_RUN/tinyproxy.pid"
+RULES_V4="$AG_RUN/rules.v4"
+RULES_V6="$AG_RUN/rules.v6"
+PROXY_USER=agentproxy
+
+load_config() {
+  [ -r "$AG_ETC/config" ] || { ag_die "missing $AG_ETC/config — was the Feature installed?"; exit 1; }
+  # shellcheck disable=SC1091
+  . "$AG_ETC/config"
+
+  # Runtime overrides let you widen the allowlist without a rebuild:
+  #   sudo AGENTIFIED_MODE=learn agentified start
+  MODE="${AGENTIFIED_MODE:-${MODE:-enforce}}"
+  PROFILES="${AGENTIFIED_PROFILES:-${PROFILES:-base,editor}}"
+  ALLOW="${AGENTIFIED_ALLOW:-${ALLOW:-}}"
+  EXTRA_CIDRS="${AGENTIFIED_EXTRA_CIDRS:-${EXTRA_CIDRS:-}}"
+  DNS_MODE="${DNS_MODE:-resolver-only}"
+  PROXY_PORT="${PROXY_PORT:-3128}"
+  ALLOW_IPV6="${ALLOW_IPV6:-false}"
+  REMOTE_USER="${REMOTE_USER:-root}"
+  REMOTE_USER_HOME="${REMOTE_USER_HOME:-/root}"
+  AGENTS="${AGENTS:-}"
+  AGENT_POLICY="${AGENT_POLICY:-strict}"
+}
+
+require_root() {
+  [ "$(id -u)" -eq 0 ] || { ag_die "must run as root (try: sudo agentified $*)"; exit 1; }
+}
+
+# ---------------------------------------------------------------- preflight --
+
+preflight() {
+  local rc=0 m
+  for m in xt_owner xt_conntrack; do
+    if ! iptables -m "${m#xt_}" --help >/dev/null 2>&1; then
+      printf 'MISSING  iptables match %s\n' "${m#xt_}"; rc=1
+    else
+      printf 'ok       iptables match %s\n' "${m#xt_}"
+    fi
+  done
+  if iptables -L OUTPUT -n >/dev/null 2>&1; then
+    printf 'ok       iptables usable (NET_ADMIN present)\n'
+  else
+    printf 'MISSING  iptables unusable — is capAdd NET_ADMIN set?\n'; rc=1
+  fi
+  if command -v tinyproxy >/dev/null 2>&1; then
+    printf 'ok       tinyproxy %s\n' "$(tinyproxy -v 2>&1 | head -1)"
+  else
+    printf 'MISSING  tinyproxy not installed\n'; rc=1
+  fi
+  if id -u "$PROXY_USER" >/dev/null 2>&1; then
+    printf 'ok       proxy user %s (uid %s)\n' "$PROXY_USER" "$(id -u "$PROXY_USER")"
+  else
+    printf 'MISSING  proxy user %s does not exist\n' "$PROXY_USER"; rc=1
+  fi
+  return $rc
+}
+
+# -------------------------------------------------------------------- proxy --
+
+write_proxy_files() {
+  mkdir -p "$AG_ETC" "$AG_RUN" "$AG_LOGDIR"
+  chown "$PROXY_USER:$PROXY_USER" "$AG_LOGDIR" "$AG_RUN"
+
+  if [ "$MODE" = "enforce" ]; then
+    local tmp="$FILTER.tmp.$$"
+    ag_compile_allowlist "$AG_HOME/profiles" "$PROFILES" "$ALLOW" > "$tmp"
+    mv "$tmp" "$FILTER"
+    chmod 0644 "$FILTER"
+  fi
+
+  ag_render_proxy_conf "$MODE" "$PROXY_PORT" "$FILTER" "$LOG" "$PIDFILE" > "$CONF.tmp.$$"
+  mv "$CONF.tmp.$$" "$CONF"
+  chmod 0644 "$CONF"
+}
+
+proxy_pid() {
+  [ -r "$PIDFILE" ] || return 1
+  local pid; pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  printf '%s\n' "$pid"
+}
+
+# Liveness check that works for an unprivileged caller.
+#
+# proxy_pid cannot: tinyproxy writes its pidfile as root before dropping
+# privileges, so it lands 0600 root-owned and the workspace user cannot read
+# it — and even given the pid, `kill -0` against another user's process returns
+# EPERM. Both make a running proxy look stopped.
+#
+# That matters more than a cosmetic wrong answer. `status` is one of the
+# commands the agent notes tell an agent to run when something looks broken
+# (docs/adr/0019). Reporting "proxy: DOWN" while the proxy is fine invites
+# exactly the "helpfully repair the container" behaviour the policy exists to
+# prevent. Reading /proc via pgrep needs no privilege.
+proxy_running() {
+  pgrep -u "$PROXY_USER" -x tinyproxy >/dev/null 2>&1
+}
+
+stop_proxy() {
+  local pid
+  if pid="$(proxy_pid)"; then
+    kill "$pid" 2>/dev/null || true
+    local i=0
+    while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+  fi
+  pkill -u "$PROXY_USER" tinyproxy 2>/dev/null || true
+  rm -f "$PIDFILE"
+  return 0
+}
+
+start_proxy() {
+  write_proxy_files
+  stop_proxy
+  : > "$LOG"
+  chown "$PROXY_USER:$PROXY_USER" "$LOG"
+
+  # tinyproxy starts as root and drops to User/Group, so the sockets it opens
+  # are owned by agentproxy — which is what the --uid-owner rule keys off.
+  if ! tinyproxy -c "$CONF"; then
+    ag_die "tinyproxy failed to start; config at $CONF"
+    return 1
+  fi
+
+  local i=0
+  while [ "$i" -lt 50 ]; do
+    if proxy_pid >/dev/null; then return 0; fi
+    sleep 0.1; i=$((i + 1))
+  done
+  ag_die "tinyproxy did not come up within 5s; see $LOG"
+  return 1
+}
+
+# ----------------------------------------------------------------- firewall --
+
+apply_firewall() {
+  local uid; uid="$(id -u "$PROXY_USER")"
+  mkdir -p "$AG_RUN"
+
+  if [ "$MODE" = "off" ]; then
+    ag_render_open > "$RULES_V4"
+    ag_render_open > "$RULES_V6"
+  else
+    ag_render_ipv4 "$uid" "$DNS_MODE" "$(ag_nameservers)" "$EXTRA_CIDRS" > "$RULES_V4"
+    ag_render_ipv6 "$uid" "$ALLOW_IPV6" > "$RULES_V6"
+  fi
+
+  iptables-restore -w 5 < "$RULES_V4" \
+    || { ag_die "iptables-restore failed; ruleset kept at $RULES_V4"; return 1; }
+
+  # IPv6 is best-effort: plenty of containers run with IPv6 disabled entirely,
+  # and that is a safe state, not an error.
+  if ip6tables -L -n >/dev/null 2>&1; then
+    ip6tables-restore -w 5 < "$RULES_V6" || ag_log "ip6tables-restore failed; IPv6 left as-is"
+  else
+    ag_log "ip6tables unavailable; skipping IPv6 ruleset"
+  fi
+  return 0
+}
+
+open_firewall() {
+  ag_render_open > "$RULES_V4"
+  iptables-restore -w 5 < "$RULES_V4" || true
+  if ip6tables -L -n >/dev/null 2>&1; then
+    ag_render_open | ip6tables-restore -w 5 || true
+  fi
+}
+
+# -------------------------------------------------------------------- state --
+
+link_state() {
+  local root="${AGENTIFIED_STATE:-/agent-state}"
+  mkdir -p "$root"
+  chown "$REMOTE_USER" "$root" 2>/dev/null || true
+
+  mkdir -p "$root/claude"
+  chown -R "$REMOTE_USER" "$root/claude" 2>/dev/null || true
+
+  # Claude Code reads user-level memory from CLAUDE.md in its config directory,
+  # which we point at the state volume. Seed it with the policy notes — but
+  # only when absent: the volume persists across rebuilds and may hold the
+  # user's own memory file, which we must not overwrite.
+  if [ "$AGENT_POLICY" != "off" ]; then
+    case ",$AGENTS," in
+      *,claude,*)
+        if [ ! -e "$root/claude/CLAUDE.md" ] && [ -r "$AG_HOME/policy/agent-notes.md" ]; then
+          cp "$AG_HOME/policy/agent-notes.md" "$root/claude/CLAUDE.md"
+          chown "$REMOTE_USER" "$root/claude/CLAUDE.md" 2>/dev/null || true
+        fi ;;
+    esac
+  fi
+
+  # Claude Code follows CLAUDE_CONFIG_DIR (set in containerEnv).
+  # Pi keeps credentials in ~/.pi with no env override, so it needs a symlink.
+  case ",$AGENTS," in
+    *,pi,*) ag_link_home_dir "$REMOTE_USER" "$REMOTE_USER_HOME" ".pi" "$root/pi" ;;
+  esac
+  return 0
+}
+
+# ----------------------------------------------------------------- commands --
+
+cmd_start() {
+  require_root start
+  local proxy_only=0
+  [ "${1:-}" = "--proxy-only" ] && proxy_only=1
+
+  link_state
+  start_proxy
+  if [ "$proxy_only" -eq 1 ]; then
+    ag_log "proxy up on 127.0.0.1:$PROXY_PORT (mode=$MODE); firewall deferred to postStart"
+  else
+    apply_firewall
+    ag_log "proxy up on 127.0.0.1:$PROXY_PORT, firewall applied (mode=$MODE, dns=$DNS_MODE)"
+  fi
+}
+
+cmd_stop() {
+  require_root stop
+  stop_proxy
+  open_firewall
+  ag_log "proxy stopped, egress open"
+}
+
+cmd_status() {
+  printf '== agentified ==\n'
+  printf 'mode       : %s\n' "$MODE"
+  printf 'dnsMode    : %s\n' "$DNS_MODE"
+  printf 'profiles   : %s\n' "$PROFILES"
+  printf 'allow      : %s\n' "${ALLOW:-(none)}"
+  printf 'extraCidrs : %s\n' "${EXTRA_CIDRS:-(none)}"
+  printf 'agents     : %s\n' "${AGENTS:-(none)}"
+  if proxy_running; then
+    if pid="$(proxy_pid)"; then
+      printf 'proxy      : up (pid %s, port %s)\n' "$pid" "$PROXY_PORT"
+    else
+      printf 'proxy      : up (port %s)\n' "$PROXY_PORT"
+    fi
+  else
+    printf 'proxy      : DOWN\n'
+  fi
+  if [ -r "$FILTER" ]; then
+    printf 'allowlist  : %s entries (%s)\n' "$(wc -l < "$FILTER" | tr -d ' ')" "$FILTER"
+  else
+    printf 'allowlist  : not compiled\n'
+  fi
+  # Reading the rules needs root. Say so, rather than printing something that
+  # reads as "the firewall is missing".
+  if [ "$(id -u)" -ne 0 ]; then
+    printf '\nfirewall   : not shown — rules are readable by root only\n'
+    printf '             run: sudo agentified status\n'
+    return 0
+  fi
+
+  printf '\n-- OUTPUT chain --\n'
+  iptables -L OUTPUT -n -v 2>/dev/null || printf '(iptables unavailable — is capAdd NET_ADMIN set?)\n'
+  if iptables -L "$AG_CHAIN" -n -v >/dev/null 2>&1; then
+    printf '\n-- %s --\n' "$AG_CHAIN"
+    iptables -L "$AG_CHAIN" -n -v
+  fi
+}
+
+cmd_hosts() {
+  ag_compile_allowlist "$AG_HOME/profiles" "$PROFILES" "$ALLOW"
+}
+
+cmd_learn() {
+  [ -r "$LOG" ] || { ag_die "no proxy log at $LOG"; exit 1; }
+  ag_extract_hosts < "$LOG"
+}
+
+cmd_denied() {
+  [ -r "$LOG" ] || { ag_die "no proxy log at $LOG"; exit 1; }
+  ag_extract_denied < "$LOG"
+}
+
+cmd_logs() {
+  [ -r "$LOG" ] || { ag_die "no proxy log at $LOG"; exit 1; }
+  tail -n "${1:-50}" "$LOG"
+}
+
+usage() {
+  cat <<'EOF'
+usage: agentified <command>
+
+  start [--proxy-only]  bring up the proxy, then the firewall (idempotent)
+  stop                  tear both down, restoring open egress
+  status                show configuration, proxy state and the OUTPUT chain
+  preflight             check kernel modules and packages this Feature needs
+  verify                run the egress assertion suite
+  hosts                 print the compiled allowlist (regexes)
+  learn                 print every host the proxy was asked for
+  denied                print every host the proxy refused
+  logs [N]              tail the proxy log
+EOF
+}
+
+main() {
+  load_config
+  local cmd="${1:-status}"
+  shift || true
+  case "$cmd" in
+    start)     cmd_start "$@" ;;
+    stop)      cmd_stop ;;
+    status)    cmd_status ;;
+    preflight) preflight ;;
+    verify)    exec "$AG_HOME/lib/verify.sh" "$@" ;;
+    hosts)     cmd_hosts ;;
+    learn)     cmd_learn ;;
+    denied)    cmd_denied ;;
+    logs)      cmd_logs "$@" ;;
+    -h|--help|help) usage ;;
+    *)         usage >&2; exit 2 ;;
+  esac
+}
+
+main "$@"

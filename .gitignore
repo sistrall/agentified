@@ -1,0 +1,15 @@
+.DS_Store
+*.tmp
+
+# Per-developer tool state. Currently caught by a global gitignore on this
+# machine, which will not protect a contributor who lacks one.
+.claude/settings.local.json
+
+# Synced from src/ by `make up`. The devcontainer CLI requires a local Feature
+# to live inside .devcontainer/, and cannot read it through a symlink.
+example/.devcontainer/agentified/
+
+# Written by the devcontainer CLI to pin the resolved version and digest of each
+# Feature. A real project commits this. Here the example references the Feature
+# by local path, so there is no registry version to pin and the file stays empty.
+example/.devcontainer/devcontainer-lock.json

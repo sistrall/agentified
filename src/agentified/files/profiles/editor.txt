@@ -1,0 +1,48 @@
+# source: https://code.visualstudio.com/docs/setup/network
+# verified: 2026-08-07 (docs, plus a real VS Code "Reopen in Container" session)
+#
+# Do not skip this profile.
+#
+# VS Code and Zed both install a server component into the container *after* it
+# starts, and extensions and language servers download from these hosts. A
+# firewall that comes up at postStart will otherwise strangle the editor's own
+# bootstrap, and the failure looks like "the container is broken", not "a
+# domain is missing".
+
+# --- VS Code: updates and the product itself -------------------------------
+update.code.visualstudio.com
+code.visualstudio.com
+go.microsoft.com
+
+# --- VS Code: marketplace and extension downloads --------------------------
+marketplace.visualstudio.com
+.gallery.vsassets.io
+.gallerycdn.vsassets.io
+.vscode-unpkg.net
+.vscode-cdn.net
+vscode.download.prss.microsoft.com
+download.visualstudio.microsoft.com
+
+# --- VS Code: settings sync and the web editor -----------------------------
+vscode.dev
+vscode-sync.trafficmanager.net
+vscode-sync-insiders.trafficmanager.net
+
+# --- VS Code: feature experimentation --------------------------------------
+default.exp-tas.com
+
+# --- Zed -------------------------------------------------------------------
+# Zed publishes no equivalent allowlist reference; these are the hosts its
+# server download and extension install use. Unverified against a source.
+zed.dev
+.zed.dev
+
+# --- deliberately NOT included ---------------------------------------------
+#   rink.hockeyapp.net       crash reporting
+#   vsmarketplacebadges.dev  README badges; cosmetic
+#
+# raw.githubusercontent.com is also on the VS Code list and is already in the
+# `base` profile.
+#
+# GitHub Copilot is NOT here — sending your code to GitHub for completions is a
+# decision to make on purpose. Use the `copilot` profile if you want it.

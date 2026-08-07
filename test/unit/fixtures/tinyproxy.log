@@ -1,0 +1,8 @@
+INFO      Aug 06 12:00:00 [41]: Initializing tinyproxy ...
+CONNECT   Aug 06 12:00:01 [42]: Connect (file descriptor 7): localhost [127.0.0.1]
+CONNECT   Aug 06 12:00:01 [42]: Request (file descriptor 7): CONNECT api.anthropic.com:443 HTTP/1.1
+CONNECT   Aug 06 12:00:01 [43]: Request (file descriptor 8): CONNECT registry.npmjs.org:443 HTTP/1.1
+CONNECT   Aug 06 12:00:02 [44]: Request (file descriptor 9): GET http://plain-http.example.com/index.html HTTP/1.1
+CONNECT   Aug 06 12:00:03 [45]: Request (file descriptor 10): CONNECT api.anthropic.com:443 HTTP/1.1
+NOTICE    Aug 06 12:00:04 [46]: Proxying refused on filtered domain "blocked.example.com"
+CONNECT   Aug 06 12:00:04 [46]: Request (file descriptor 11): CONNECT blocked.example.com:443 HTTP/1.1

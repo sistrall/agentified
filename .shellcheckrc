@@ -1,0 +1,5 @@
+# Resolve `# shellcheck source=...` directives relative to the script being
+# checked, rather than to the working directory. Without this, ShellCheck cannot
+# find the lib/*.sh files (they are referenced through $AGENTIFIED_HOME, which
+# only exists once installed) and reports SC1091 on every source line.
+source-path=SCRIPTDIR

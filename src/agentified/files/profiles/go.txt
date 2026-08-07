@@ -1,0 +1,12 @@
+# source: none published; derived from the Go module proxy defaults
+# verified: unverified (no toolchain check yet)
+#
+# NOTE storage.googleapis.com permits every bucket on Google Cloud Storage.
+# It is here because the module proxy uses it, but it is a large hole in an
+# allowlist meant to limit exfiltration. Drop it if your builds do not need it.
+
+proxy.golang.org
+sum.golang.org
+.golang.org
+go.dev
+storage.googleapis.com

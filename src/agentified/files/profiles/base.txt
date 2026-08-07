@@ -1,0 +1,11 @@
+# source: no published allowlist; these are the hosts git and the GitHub API use
+# verified: 2026-08-07 (empirical: exercised by every integration scenario)
+#
+# Source control, and the things every toolchain fetches from it.
+
+github.com
+api.github.com
+codeload.github.com
+raw.githubusercontent.com
+objects.githubusercontent.com
+.githubusercontent.com
