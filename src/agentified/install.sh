@@ -18,7 +18,7 @@ unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY
 
 AGENTS="${AGENTS:-claude}"
 AGENT_POLICY="${AGENTPOLICY:-strict}"
-PROFILES="${PROFILES:-base,editor}"
+PROFILES="${PROFILES:-base,claude,editor}"
 ALLOW="${ALLOW:-}"
 EXTRA_CIDRS="${EXTRACIDRS:-}"
 DNS_MODE="${DNSMODE:-resolver-only}"

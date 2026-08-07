@@ -119,6 +119,38 @@ setup() { load_ag; }
   done
 }
 
+@test "the shipped defaults are coherent with each other" {
+  # The Feature shipped `agents: claude` with `profiles: base,editor` — which
+  # installs Claude Code and then blocks its API. That is precisely the mistake
+  # ADR-0017 exists to catch, sitting unnoticed in our own defaults, and it was
+  # found by CI running the Feature out of the box rather than by review.
+  manifest="$AG_LIB/../../devcontainer-feature.json"
+  [ -f "$manifest" ]
+
+  default_of() {
+    awk -v key="\"$1\": {" '
+      index($0, key) { found = 1 }
+      found && /"default":/ {
+        sub(/.*"default": *"/, ""); sub(/".*/, ""); print; exit
+      }' "$manifest"
+  }
+
+  agents="$(default_of agents)"
+  profiles="$(default_of profiles)"
+  [ -n "$agents" ]   || { echo "could not read the default agents"; return 1; }
+  [ -n "$profiles" ] || { echo "could not read the default profiles"; return 1; }
+
+  while IFS= read -r agent; do
+    [ "$agent" = "none" ] && continue
+    case ",$profiles," in
+      *",$agent,"*) ;;
+      *) echo "default agents='$agents' but default profiles='$profiles' omits '$agent'"
+         echo "out of the box, $agent would install and be unable to reach its own API"
+         return 1 ;;
+    esac
+  done < <(ag_split_csv "$agents")
+}
+
 @test "the Claude Code deny list covers the escape routes" {
   # A deny rule with the wrong syntax is worse than none: it looks like
   # protection and silently matches nothing. Claude Code's documented form is

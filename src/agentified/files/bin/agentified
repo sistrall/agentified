@@ -38,7 +38,7 @@ load_config() {
   # Runtime overrides let you widen the allowlist without a rebuild:
   #   sudo AGENTIFIED_MODE=learn agentified start
   MODE="${AGENTIFIED_MODE:-${MODE:-enforce}}"
-  PROFILES="${AGENTIFIED_PROFILES:-${PROFILES:-base,editor}}"
+  PROFILES="${AGENTIFIED_PROFILES:-${PROFILES:-base,claude,editor}}"
   ALLOW="${AGENTIFIED_ALLOW:-${ALLOW:-}}"
   EXTRA_CIDRS="${AGENTIFIED_EXTRA_CIDRS:-${EXTRA_CIDRS:-}}"
   DNS_MODE="${DNS_MODE:-resolver-only}"

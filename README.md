@@ -242,7 +242,7 @@ is wide open. [ADR-0007](docs/adr/0007-learn-mode-switches-the-filter-off.md).
 | Option | Default | What it does |
 |---|---|---|
 | `agents` | `claude` | `claude`, `pi`, `claude,pi`, or `none` for just the boundary |
-| `profiles` | `base,editor` | Which allowlists to combine. An unknown name fails the build. |
+| `profiles` | `base,claude,editor` | Which allowlists to combine. An unknown name fails the build. |
 | `allow` | `""` | Extra sites, comma-separated. Leading dot = "and subdomains". |
 | `extraCidrs` | `""` | Address ranges reachable directly, skipping the proxy — for a database container alongside yours. |
 | `dnsMode` | `resolver-only` | `resolver-only` (only the container's own DNS server), `blocked` (none), `open` (any) |

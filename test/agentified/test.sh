@@ -1,5 +1,7 @@
 #!/bin/bash
-# Default options: agents=claude, profiles=base,editor, mode=enforce.
+# Default options: agents=claude, profiles=base,claude,editor, mode=enforce.
+# This is the Feature out of the box, so it is also the check that the defaults
+# are coherent with each other — see ADR-0017.
 set -e
 # shellcheck source=/dev/null  # injected by the harness; only exists inside the test container
 source dev-container-features-test-lib
