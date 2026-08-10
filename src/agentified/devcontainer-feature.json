@@ -1,6 +1,6 @@
 {
   "id": "agentified",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "Agentified (sandboxed coding agents)",
   "description": "Installs Claude Code and/or Pi behind a default-deny egress boundary (CONNECT-allowlisting proxy + iptables backstop).",
   "documentationURL": "https://github.com/sistrall/agentified",
