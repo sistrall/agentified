@@ -13,6 +13,11 @@
 # --- completions and chat -------------------------------------------------
 # The reference lists *.githubcopilot.com plus per-plan subdomains
 # (individual/business/enterprise); the leading dot covers all of them.
+#
+# This also happens to cover api.githubcopilot.com, which is where GitHub's
+# remote MCP server lives. If the MCP server is all you want, use the narrower
+# `github-mcp` profile instead of this one — it grants that endpoint without
+# opting into sending your code to GitHub for completions.
 .githubcopilot.com
 
 # --- suggestion plumbing --------------------------------------------------

@@ -1,0 +1,29 @@
+# source: empirical - a real `playwright install chromium` in learn mode
+# verified: 2026-08-10
+#
+# Playwright downloads browser binaries from its own CDN rather than from npm,
+# so `npm install` succeeds and `playwright install` is what fails. The error
+# reads as a broken toolchain rather than a policy decision.
+#
+# This is the useful shape for a profile: not the framework you are writing
+# (Svelte, React, Vue all just fetch from npm) but the tooling that fetches its
+# own binaries. See docs/adr/0020.
+
+cdn.playwright.dev
+playwright.download.prss.microsoft.com
+
+# --- the official MCP server ----------------------------------------------
+# `@playwright/mcp` runs locally over stdio and drives a browser on this
+# machine. It needs no host of its own — only the browser binaries above, which
+# this profile already covers.
+
+# --- deliberately NOT included --------------------------------------------
+#   playwright.azureedge.net
+#     The pre-2024 download host. Current Playwright does not use it — it was
+#     not touched in the measured run. Add it via `allow` if you pin an old
+#     version.
+#
+# Note that Playwright's browsers also need OS libraries, which
+# `playwright install --with-deps` installs via apt. That needs your distro's
+# mirrors allowlisted, which agentified does not ship a profile for because the
+# hosts depend on your base image. `agentified denied` will name them.

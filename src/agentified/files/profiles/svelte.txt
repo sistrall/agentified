@@ -1,0 +1,34 @@
+# source: https://svelte.dev/docs/ai/remote-setup, plus measurement (see below)
+# verified: 2026-08-10 (learn-mode session: sv create, npm install, build,
+#           svelte-check, and both MCP server variants)
+#
+# Working on Svelte *with an agent*.
+#
+# Note what is NOT here. A full SvelteKit lifecycle — `sv create`, `npm
+# install`, `npm run build`, `svelte-check` — was measured in learn mode and
+# touched exactly one host: registry.npmjs.org, which the `node` profile
+# already covers. The build toolchain needs nothing Svelte-specific, and the
+# same is true of React, Vue, Next and the rest: a framework is an npm package.
+#
+# What *is* Svelte-specific is the agent-facing side. Use this profile
+# alongside `node`.
+
+# --- the Svelte MCP server ------------------------------------------------
+# The official MCP server gives an agent Svelte documentation, an autofixer and
+# playground links. The hosted variant is configured as:
+#   { "mcpServers": { "svelte": { "url": "https://mcp.svelte.dev/mcp" } } }
+# Blocked, it fails in a way that reads as "the MCP server is broken".
+mcp.svelte.dev
+
+# --- documentation lookups ------------------------------------------------
+# Not required by any tool — measured, and nothing reached for it. It is here
+# because an agent asked about Svelte will try to fetch the docs directly, the
+# same reason code.claude.com is in the claude profile. Drop it if you would
+# rather the agent used only the MCP server.
+svelte.dev
+
+# --- deliberately NOT included --------------------------------------------
+# The *local* MCP server, `npx @sveltejs/mcp`, needs none of this: its
+# documentation is bundled, and after npm installs it the server runs fully
+# offline. Measured. If you use the local variant and nothing else, `node`
+# alone is enough and you do not need this profile.

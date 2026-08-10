@@ -24,6 +24,7 @@ that?"
 | [0004](0004-only-the-proxy-user-may-leave.md) | Let only the proxy's user account reach the internet |
 | [0018](0018-guardrail-not-a-sandbox.md) | **This is a guardrail, not a sandbox — and the docs must say so first** |
 | [0019](0019-tell-the-agent-and-deny-the-tools.md) | Tell the agent the boundary is deliberate, and deny it the tools anyway |
+| [0020](0020-profiles-follow-tools-not-frameworks.md) | Profiles follow tools, not frameworks — and agent-facing hosts are a second axis |
 
 ### How the allowlist works
 
@@ -79,6 +80,13 @@ Open questions, written down so they don't get forgotten:
   exists and is writable, but no test actually logs into Claude Code, rebuilds,
   and confirms you're still logged in. See
   [ADR-0015](0015-agent-logins-in-a-per-project-volume.md).
+- **Automated verification only covers builds, not agent workflows.** The
+  `toolchains` scenario runs real package managers and checks nothing was
+  refused, which honestly verified `node`, `python` and `ruby`. It is blind to
+  everything the *agent* reaches for — MCP servers, documentation lookups, tools
+  the agent invokes rather than the build. For a project about bounding agents,
+  that is the wrong half to have automated. Driving a real MCP handshake in CI
+  would close it. See [ADR-0020](0020-profiles-follow-tools-not-frameworks.md).
 - **Could we shrink the `editor` allowlist?** If we pre-installed the editor's
   server component when the image is built, we might not need to allow the
   editor's download sites at all afterwards.

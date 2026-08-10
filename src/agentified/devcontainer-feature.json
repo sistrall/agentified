@@ -16,7 +16,7 @@
     "profiles": {
       "type": "string",
       "default": "base,claude,editor",
-      "description": "Allowlist profiles to compose: base, claude, pi, editor, copilot, ruby, node, python, rust, go. Unknown names fail the build. Include the profile matching each agent you install."
+      "description": "Allowlist profiles to compose: base, claude, pi, editor, copilot, github-mcp, ruby, node, python, rust, go, playwright, svelte. Unknown names fail the build. Include the profile matching each agent you install."
     },
     "allow": {
       "type": "string",

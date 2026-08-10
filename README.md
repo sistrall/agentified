@@ -181,6 +181,9 @@ small named lists you combine:
 | `rust` | crates.io | *unverified* |
 | `go` | the Go module proxy | *unverified* |
 | `pi` | Pi's model providers and updates | *unverified* |
+| `playwright` | Playwright's browser-binary CDNs | a real `playwright install` |
+| `svelte` | the Svelte MCP server and docs | measured MCP handshake |
+| `github-mcp` | GitHub's remote MCP server | official endpoint, reachability checked |
 
 Every profile carries a `# source:` and `# verified:` header saying where its
 hosts came from and when they were last checked, and a test refuses to let a
@@ -198,6 +201,26 @@ Anything else goes in `allow`. A leading dot means "and all subdomains":
 > and extensions download after that. Without those sites allowed, the editor
 > can't finish setting itself up — and it looks like "the container is broken",
 > not "a domain is missing".
+
+### If you use MCP servers
+
+A **remote** MCP server is just an HTTPS endpoint, so it needs allowlisting like
+anything else — and a blocked one fails in a way that reads as "the MCP server
+is broken" rather than "a host is missing". We ship profiles for the ones with
+official servers (`claude`, `svelte`, `github-mcp`, and `copilot` covers
+GitHub's too), but there are thousands of others.
+
+For any server we don't cover, the host is in its `url`. Add it to `allow`:
+
+```jsonc
+"allow": "mcp.example.com"
+```
+
+A **local** MCP server — anything launched with `npx`, `uvx` or Docker — needs
+whatever *it* connects to, which is often nothing at all. `@sveltejs/mcp` and
+`@playwright/mcp` are both fully offline once installed.
+
+Either way, `sudo agentified denied` names what got refused.
 
 > **Copilot is not in the `editor` profile.** Copilot sends your code to GitHub
 > for completions, which is a decision to make deliberately rather than inherit

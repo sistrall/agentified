@@ -1,0 +1,23 @@
+# source: https://github.com/github/github-mcp-server
+# verified: 2026-08-10 (endpoint from the official README; reachability checked)
+#
+# GitHub's remote MCP server — repositories, issues, pull requests and actions
+# as agent tools:
+#   { "mcpServers": { "github": { "url": "https://api.githubcopilot.com/mcp/" } } }
+#
+# This exists as its own profile because of a naming trap. The server is hosted
+# on a *Copilot* domain, so without this you would have to enable the whole
+# `copilot` profile to use GitHub's MCP server — opting into sending your code
+# to GitHub for completions, which is a separate decision you may not want to
+# make. This is the narrower grant: the MCP endpoint and nothing else.
+#
+# Use it alongside `base`, which covers github.com itself.
+api.githubcopilot.com
+
+# --- the local variant ----------------------------------------------------
+# `ghcr.io/github/github-mcp-server` runs in Docker and talks to github.com
+# directly, which `base` already covers — so it needs nothing from this file.
+# Pulling the image is a host-side operation and never crosses this boundary.
+#
+# For GitHub Enterprise, GITHUB_HOST points it at your own instance; add that
+# hostname to the `allow` option.
