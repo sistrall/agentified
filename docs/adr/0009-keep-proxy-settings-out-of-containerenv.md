@@ -77,6 +77,29 @@ our build either.
 `containerEnv` is still used — for `CLAUDE_CONFIG_DIR`, `NO_PROXY` and our own
 paths. Those are harmless during a build.
 
+### `CLAUDE_CONFIG_DIR` is written in both places
+
+`containerEnv` reaches the processes the tooling starts, and nothing else.
+Anything that resets the environment — `su -l`, `cron`, `sudo -i` — drops it,
+and Claude Code then falls back to `~/.claude`, off the state volume and gone at
+the next rebuild ([ADR-0015](0015-agent-logins-in-a-per-project-volume.md)).
+
+That was found through the `verify` assertion, which probes a *login* shell for
+exactly the reason described below and so could never see it: it reported
+`got 'unset'` on a container where the setting was correct and working
+([issue #2](https://github.com/sistrall/agentified/issues/2)). Making the check
+read the container environment instead would have turned it green while
+asserting something weaker than the guarantee it claims to test.
+
+So `install.sh` exports it from `/etc/profile.d/90-agentified.sh` as well, when
+`claude` is among the installed agents. The image `ENV` stays; `profile.d` makes
+it survive an environment reset. The assertion then passes on its own merits.
+
+Note that CI could not have caught this. The devcontainer CLI writes
+`containerEnv` into `/etc/environment`, which Debian's `su` reads back through
+`pam_env` — so the probe saw the variable under the tooling the tests use, and
+not under tooling that skips that step.
+
 ## What it costs
 
 **This depends on `userEnvProbe` being switched on.** It's on by default

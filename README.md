@@ -93,8 +93,8 @@ Add this to the `features` block of your `.devcontainer/devcontainer.json`:
 ```
 
 The trailing `:0` is a version. Each release is published under four tags — for
-`0.2.0` those are `:0.2.0`, `:0.2`, `:0` and `:latest` — so `:0` means "the
-newest 0.x". Pin it tighter with `:0.2.0` if you want to control upgrades
+`0.3.0` those are `:0.3.0`, `:0.3`, `:0` and `:latest` — so `:0` means "the
+newest 0.x". Pin it tighter with `:0.3.0` if you want to control upgrades
 yourself. Either way, commit the `devcontainer-lock.json` the tooling generates:
 that is what makes your teammates and CI build from the identical Feature.
 
@@ -258,7 +258,12 @@ sudo agentified denied      # what did the policy just block?
 ```
 
 `learn` is a diagnostic setting, not a middle ground — while it's on, the proxy
-is wide open. [ADR-0007](docs/adr/0007-learn-mode-switches-the-filter-off.md).
+is wide open, and `status` says so in as many words. It reports the mode the
+running proxy was *started* with, not the one your config asks for, so a
+`sudo AGENTIFIED_MODE=learn agentified start` you forgot about cannot hide
+behind the word `enforce`.
+[ADR-0007](docs/adr/0007-learn-mode-switches-the-filter-off.md),
+[ADR-0021](docs/adr/0021-report-what-is-running-not-what-was-configured.md).
 
 ## All options
 
@@ -281,6 +286,7 @@ Run these inside the container:
 
 ```bash
 sudo agentified status     # settings, proxy state, active firewall rules
+agentified running         # exit 0 if the boundary is up (no output, no sudo)
 sudo agentified verify     # the full assertion suite — run this when confused
 sudo agentified preflight  # check the container has what this needs
 sudo agentified hosts      # the allowlist as it was actually compiled
@@ -338,13 +344,47 @@ people false confidence.
    a good reason ([ADR-0009](docs/adr/0009-keep-proxy-settings-out-of-containerenv.md)).
    If you set `"userEnvProbe": "none"` in your `devcontainer.json`, your tools
    won't see them. `verify` checks this explicitly and tells you.
+9. **Some tooling never runs the Feature's lifecycle commands, and then the
+   boundary never starts.** agentified brings itself up through the
+   `onCreateCommand` and `postStartCommand` it declares. **Zed** (through 1.14)
+   applies a Feature's `capAdd`, `mounts` and `containerEnv` and ignores its
+   lifecycle commands, so everything looks installed and nothing is running.
+   A container restarted outside the devcontainer tooling — `restart:
+   unless-stopped`, or a plain `docker restart` — has the same gap, because
+   `postStartCommand` doesn't fire there either.
+
+   The symptom is not "no boundary". It's your agent blaming the proxy, because
+   `https_proxy` is still exported and nothing is listening on it:
+
+   ```
+   Failed to connect to api.anthropic.com: ConnectionRefused
+   A proxy is configured via https_proxy. Check that it allows connections to the host above.
+   ```
+
+   The allowlist is fine. There is simply no boundary — `OUTPUT` policy
+   `ACCEPT`, nothing filtered. New interactive shells now warn about this, and
+   `sudo agentified status` leads with it, but the fix is to repeat the
+   Feature's own hooks in your `devcontainer.json`:
+
+   ```jsonc
+   "onCreateCommand":  "sudo /usr/local/bin/agentified start --proxy-only",
+   "postStartCommand": "sudo /usr/local/bin/agentified start"
+   ```
+
+   Under tooling that honours both, they then run twice — which is harmless,
+   every subcommand is idempotent. Confirm with `sudo agentified verify`.
+   [ADR-0022](docs/adr/0022-a-boundary-that-did-not-start-must-say-so.md).
 
 ## Podman
 
-> **Not yet tested.** Everything here is reasoned from how Podman works, not
-> from a run. Docker is what the test suite exercises. If you try Podman,
-> `sudo agentified preflight` and `sudo agentified verify` will tell you
-> quickly whether it holds — and an issue either way would be welcome.
+> **Not tested by us.** Everything here is reasoned from how Podman works, not
+> from a run of our own; Docker is what the test suite exercises. One field
+> report ([#1](https://github.com/sistrall/agentified/issues/1)) has it working
+> under rootless Podman 6.0.0 on macOS — `preflight` passing and `verify` green
+> — once the boundary had been started by hand, which is limitation 9 above and
+> not a Podman problem. If you try Podman, `sudo agentified preflight` and
+> `sudo agentified verify` will tell you quickly whether it holds — and an issue
+> either way would be welcome.
 
 Two host-side notes:
 
