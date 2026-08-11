@@ -28,6 +28,7 @@ LOG="$AG_LOGDIR/proxy.log"
 PIDFILE="$AG_RUN/tinyproxy.pid"
 RULES_V4="$AG_RUN/rules.v4"
 RULES_V6="$AG_RUN/rules.v6"
+STATEFILE="$AG_RUN/state"
 PROXY_USER=agentproxy
 
 load_config() {
@@ -101,11 +102,29 @@ write_proxy_files() {
   chmod 0644 "$CONF"
 }
 
+# True when PID names a process that is still doing something.
+#
+# `kill -0` and pgrep both count a zombie as running, and zombies pile up here:
+# tinyproxy daemonises, so its processes are re-parented to PID 1, and a
+# container's PID 1 is usually `sleep infinity` — which never reaps. Every
+# proxy that has ever exited then stays visible, and every liveness check built
+# on pgrep reports a boundary that is gone as up. That is the same lie the rest
+# of this file exists to avoid.
+pid_alive() {
+  local pid="${1-}" st
+  [ -n "$pid" ] || return 1
+  st="$(cat "/proc/$pid/stat" 2>/dev/null)" || return 1
+  case "$st" in
+    *') Z'*) return 1 ;;
+  esac
+  return 0
+}
+
 proxy_pid() {
   [ -r "$PIDFILE" ] || return 1
   local pid; pid="$(cat "$PIDFILE" 2>/dev/null || true)"
   [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null || return 1
+  pid_alive "$pid" || return 1
   printf '%s\n' "$pid"
 }
 
@@ -122,7 +141,11 @@ proxy_pid() {
 # exactly the "helpfully repair the container" behaviour the policy exists to
 # prevent. Reading /proc via pgrep needs no privilege.
 proxy_running() {
-  pgrep -u "$PROXY_USER" -x tinyproxy >/dev/null 2>&1
+  local pid
+  for pid in $(pgrep -u "$PROXY_USER" -x tinyproxy 2>/dev/null); do
+    pid_alive "$pid" && return 0
+  done
+  return 1
 }
 
 stop_proxy() {
@@ -130,7 +153,7 @@ stop_proxy() {
   if pid="$(proxy_pid)"; then
     kill "$pid" 2>/dev/null || true
     local i=0
-    while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    while pid_alive "$pid" && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
   fi
   pkill -u "$PROXY_USER" tinyproxy 2>/dev/null || true
   rm -f "$PIDFILE"
@@ -218,11 +241,38 @@ link_state() {
     esac
   fi
 
-  # Claude Code follows CLAUDE_CONFIG_DIR (set in containerEnv).
+  # Claude Code follows CLAUDE_CONFIG_DIR, set in containerEnv and again in
+  # /etc/profile.d so it survives an environment reset (su -l, cron).
   # Pi keeps credentials in ~/.pi with no env override, so it needs a symlink.
   case ",$AGENTS," in
     *,pi,*) ag_link_home_dir "$REMOTE_USER" "$REMOTE_USER_HOME" ".pi" "$root/pi" ;;
   esac
+  return 0
+}
+
+# Record what this invocation actually applied, so `status` and `verify` can
+# report the running boundary instead of recomputing what a *new* start would
+# do. World-readable on purpose: `status` is meant to work without sudo.
+record_state() {
+  local fw="${1-}" tmp="$STATEFILE.tmp.$$"
+  mkdir -p "$AG_RUN"
+  ag_render_state "$MODE" "$fw" "$DNS_MODE" "$PROFILES" "$ALLOW" "$PROXY_PORT" > "$tmp"
+  mv "$tmp" "$STATEFILE"
+  chmod 0644 "$STATEFILE"
+}
+
+# The mode/profiles/allow the running proxy was started with, or nothing at all
+# when there is no proxy to describe. Reading the file without that guard would
+# resurrect the last run's answer after a plain `docker restart`, which is
+# exactly the case where the record is wrong.
+read_state() {
+  RUN_MODE=""; RUN_FIREWALL=""; RUN_DNS_MODE=""; RUN_PROFILES=""; RUN_ALLOW=""
+  proxy_running || return 0
+  RUN_MODE="$(ag_state_get "$STATEFILE" RUN_MODE || true)"
+  RUN_FIREWALL="$(ag_state_get "$STATEFILE" RUN_FIREWALL || true)"
+  RUN_DNS_MODE="$(ag_state_get "$STATEFILE" RUN_DNS_MODE || true)"
+  RUN_PROFILES="$(ag_state_get "$STATEFILE" RUN_PROFILES || true)"
+  RUN_ALLOW="$(ag_state_get "$STATEFILE" RUN_ALLOW || true)"
   return 0
 }
 
@@ -233,12 +283,17 @@ cmd_start() {
   local proxy_only=0
   [ "${1:-}" = "--proxy-only" ] && proxy_only=1
 
+  # Cleared first, then rewritten after each step that succeeds: a start that
+  # dies half way through must not leave a record claiming the firewall is up.
+  rm -f "$STATEFILE"
   link_state
   start_proxy
+  record_state deferred
   if [ "$proxy_only" -eq 1 ]; then
     ag_log "proxy up on 127.0.0.1:$PROXY_PORT (mode=$MODE); firewall deferred to postStart"
   else
     apply_firewall
+    record_state applied
     ag_log "proxy up on 127.0.0.1:$PROXY_PORT, firewall applied (mode=$MODE, dns=$DNS_MODE)"
   fi
 }
@@ -247,15 +302,66 @@ cmd_stop() {
   require_root stop
   stop_proxy
   open_firewall
+  rm -f "$STATEFILE"
   ag_log "proxy stopped, egress open"
 }
 
+# One `label : value` line, annotated when the running boundary was started
+# with something other than what the config file now says.
+status_line() {
+  local label="${1-}" observed="${2-}" configured="${3-}"
+  if [ -z "$observed" ] || [ "$observed" = "$configured" ]; then
+    printf '%-11s: %s\n' "$label" "${configured:-(none)}"
+  else
+    printf '%-11s: %s   (config: %s)\n' "$label" "$observed" "${configured:-(none)}"
+  fi
+}
+
+# Everything above is a summary; this is the part someone in trouble needs to
+# read. Both states it names look identical from inside a shell — the proxy
+# variables are exported either way — and both are silently permissive.
+status_warnings() {
+  if ! proxy_running; then
+    [ "$MODE" = "off" ] && return 0
+    printf '\n!! NO BOUNDARY IS RUNNING.\n'
+    printf '   Nothing is being filtered, and http(s)_proxy points at\n'
+    printf '   127.0.0.1:%s with nothing listening, so clients fail with\n' "$PROXY_PORT"
+    printf '   ConnectionRefused rather than with a policy decision.\n'
+    printf '     start it:  sudo agentified start\n'
+    printf '   Some editors do not run a Feature'"'"'s onCreate/postStart commands,\n'
+    printf '   and a container restarted outside the devcontainer tooling never\n'
+    printf '   runs them either. See the README, "Limitations".\n'
+    return 0
+  fi
+  if [ "$RUN_FIREWALL" = "deferred" ]; then
+    printf '\n!! THE FIREWALL BACKSTOP WAS NOT APPLIED BY THIS START.\n'
+    printf '   The proxy came up with --proxy-only, which leaves L3 to postStart.\n'
+    printf '   If nothing ran that, anything ignoring the proxy variables egresses\n'
+    printf '   directly — the OUTPUT chain below is the authority.\n'
+    printf '     fix:  sudo agentified start\n'
+  fi
+  case "${RUN_MODE:-$MODE}" in
+    learn)
+      printf '\n!! LEARN MODE: the proxy permits every host and records it.\n'
+      printf '   The allowlist is not being applied. This is a diagnostic\n'
+      printf '   setting, not a middle ground — switch back to enforce when done.\n' ;;
+    off)
+      printf '\n!! MODE=OFF: nothing is filtered and egress is open.\n' ;;
+  esac
+  return 0
+}
+
 cmd_status() {
+  read_state
   printf '== agentified ==\n'
-  printf 'mode       : %s\n' "$MODE"
-  printf 'dnsMode    : %s\n' "$DNS_MODE"
-  printf 'profiles   : %s\n' "$PROFILES"
-  printf 'allow      : %s\n' "${ALLOW:-(none)}"
+  if proxy_running; then
+    status_line mode "$RUN_MODE" "$MODE"
+  else
+    printf '%-11s: %s\n' "mode" "(nothing running) — config: $MODE"
+  fi
+  status_line dnsMode "$RUN_DNS_MODE" "$DNS_MODE"
+  status_line profiles "$RUN_PROFILES" "$PROFILES"
+  status_line allow "$RUN_ALLOW" "$ALLOW"
   printf 'extraCidrs : %s\n' "${EXTRA_CIDRS:-(none)}"
   printf 'agents     : %s\n' "${AGENTS:-(none)}"
   if proxy_running; then
@@ -272,6 +378,7 @@ cmd_status() {
   else
     printf 'allowlist  : not compiled\n'
   fi
+  status_warnings
   # Reading the rules needs root. Say so, rather than printing something that
   # reads as "the firewall is missing".
   if [ "$(id -u)" -ne 0 ]; then
@@ -286,6 +393,46 @@ cmd_status() {
     printf '\n-- %s --\n' "$AG_CHAIN"
     iptables -L "$AG_CHAIN" -n -v
   fi
+}
+
+# Exit status only, no output, no root needed: something a shell startup file
+# or a script can ask cheaply, without parsing `status`.
+cmd_running() {
+  proxy_running
+}
+
+# The short version of the warnings above, for /etc/profile.d to print in a new
+# interactive shell. Silent when the running boundary is doing what it was
+# configured to do; a few lines when it is not.
+#
+# Every state named here looks identical from inside a shell — the proxy
+# variables are exported the same way whether or not anything is enforcing
+# them — so the shell is the right place to say otherwise. Prints on stdout;
+# the caller sends it to stderr, because this file is also read by
+# non-interactive zsh and stdout there belongs to scp and rsync.
+cmd_shell_warning() {
+  read_state
+  if ! proxy_running; then
+    [ "$MODE" = "off" ] && return 0
+    printf '\n[agentified] WARNING: the egress boundary is NOT running.\n'
+    printf '[agentified]   Nothing is filtered, and http_proxy points at\n'
+    printf '[agentified]   127.0.0.1:%s with nothing listening.\n' "$PROXY_PORT"
+    printf '[agentified]   start it:  sudo agentified start\n\n'
+    return 0
+  fi
+  case "${RUN_MODE:-$MODE}" in
+    learn)
+      printf '\n[agentified] NOTE: learn mode — the proxy permits every host and\n'
+      printf '[agentified]   records it. The allowlist is not being applied.\n\n' ;;
+    off)
+      printf '\n[agentified] NOTE: mode=off — nothing is being filtered.\n\n' ;;
+  esac
+  if [ "$RUN_FIREWALL" = "deferred" ]; then
+    printf '[agentified] WARNING: the firewall backstop was not applied\n'
+    printf '[agentified]   (the proxy came up with --proxy-only).\n'
+    printf '[agentified]   fix:  sudo agentified start\n\n'
+  fi
+  return 0
 }
 
 cmd_hosts() {
@@ -314,6 +461,9 @@ usage: agentified <command>
   start [--proxy-only]  bring up the proxy, then the firewall (idempotent)
   stop                  tear both down, restoring open egress
   status                show configuration, proxy state and the OUTPUT chain
+  running               exit 0 if the boundary's proxy is live (no output)
+  shell-warning         print a short warning when the running boundary is not
+                        enforcing what it was configured to (used by profile.d)
   preflight             check kernel modules and packages this Feature needs
   verify                run the egress assertion suite
   hosts                 print the compiled allowlist (regexes)
@@ -331,6 +481,8 @@ main() {
     start)     cmd_start "$@" ;;
     stop)      cmd_stop ;;
     status)    cmd_status ;;
+    running)   cmd_running ;;
+    shell-warning) cmd_shell_warning ;;
     preflight) preflight ;;
     verify)    exec "$AG_HOME/lib/verify.sh" "$@" ;;
     hosts)     cmd_hosts ;;

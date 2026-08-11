@@ -12,5 +12,8 @@ check "it was recorded"                    bash -c "sudo agentified learn | grep
 check "no filter file is referenced"       bash -c "! grep -q FilterDefaultDeny /etc/agentified/tinyproxy.conf"
 expect_blocked "L3 backstop still active"  curl_direct https://example.com/
 check "OUTPUT policy is still DROP"        bash -c "sudo iptables -S OUTPUT | grep -q '^-P OUTPUT DROP'"
+# Learn mode is the one setting where the boundary looks configured and filters
+# nothing, so status has to say so in as many words rather than print a word.
+check "status says the proxy is wide open" bash -c "sudo agentified status | grep -q 'LEARN MODE'"
 
 reportResults

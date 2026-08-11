@@ -12,13 +12,33 @@ set -uo pipefail
 
 AG_HOME="${AGENTIFIED_HOME:-/usr/local/share/agentified}"
 AG_ETC="${AGENTIFIED_ETC:-/etc/agentified}"
+AG_RUN="${AGENTIFIED_RUN:-/run/agentified}"
 
 # shellcheck source=common.sh
 . "$AG_HOME/lib/common.sh"
+# shellcheck source=state.sh
+. "$AG_HOME/lib/state.sh"
 # shellcheck disable=SC1091
 . "$AG_ETC/config"
 
-MODE="${AGENTIFIED_MODE:-${MODE:-enforce}}"
+# Two modes, deliberately. CONFIGURED_MODE is what the config file asks for;
+# RUN_MODE is what `start` recorded actually applying. Asserting against the
+# configured one made a proxy running in learn mode fail the enforce
+# assertions, which reads as "the allowlist is broken" rather than "you are in
+# learn mode" — see docs/adr/0021.
+CONFIGURED_MODE="${AGENTIFIED_MODE:-${MODE:-enforce}}"
+RUN_MODE=""
+RUN_FIREWALL=""
+PROXY_UP=0
+# `agentified running` rather than pgrep: pgrep counts zombies, and nothing
+# reaps them when PID 1 is the usual `sleep infinity`, so a proxy that exited
+# hours ago would still answer here.
+if /usr/local/bin/agentified running 2>/dev/null; then
+  PROXY_UP=1
+  RUN_MODE="$(ag_state_get "$AG_RUN/state" RUN_MODE || true)"
+  RUN_FIREWALL="$(ag_state_get "$AG_RUN/state" RUN_FIREWALL || true)"
+fi
+MODE="${RUN_MODE:-$CONFIGURED_MODE}"
 DNS_MODE="${DNS_MODE:-resolver-only}"
 PROXY_PORT="${PROXY_PORT:-3128}"
 ALLOW_IPV6="${ALLOW_IPV6:-false}"
@@ -62,7 +82,11 @@ assert_no() {
 CURL_P="curl -sS --proxy $PROXY --connect-timeout 5 --max-time 20 -o /dev/null"
 CURL_D="curl -sS --noproxy '*' --connect-timeout 5 --max-time 20 -o /dev/null"
 
-printf '\n== agentified verify (mode=%s dns=%s ipv6=%s) ==\n\n' "$MODE" "$DNS_MODE" "$ALLOW_IPV6"
+printf '\n== agentified verify (mode=%s dns=%s ipv6=%s) ==\n' "$MODE" "$DNS_MODE" "$ALLOW_IPV6"
+if [ -n "$RUN_MODE" ] && [ "$RUN_MODE" != "$CONFIGURED_MODE" ]; then
+  printf '   mode is the one the running proxy was started with; the config file says %s\n' "$CONFIGURED_MODE"
+fi
+printf '\n'
 
 printf 'environment\n'
 if [ -x /usr/local/bin/agentified ]; then ok "agentified CLI installed"; else bad "agentified CLI installed"; fi
@@ -71,7 +95,33 @@ if /usr/local/bin/agentified preflight >/dev/null 2>&1; then
 else
   bad "preflight" "$(/usr/local/bin/agentified preflight 2>&1)"
 fi
-if pgrep -u agentproxy tinyproxy >/dev/null 2>&1; then ok "proxy process running"; else bad "proxy process running"; fi
+
+printf '\nboundary\n'
+# Everything below describes the boundary that is *running*. If none is, say so
+# once and plainly: an installed-but-never-started Feature leaves the proxy
+# variables exported and nothing listening, which reads as a broken proxy
+# rather than as no boundary at all.
+if [ "$PROXY_UP" -eq 0 ]; then
+  bad "the boundary is running" \
+      "no tinyproxy process. Some editors never run a Feature's onCreate/postStart commands, and a container restarted outside the devcontainer tooling does not either — start it with: sudo agentified start"
+elif [ -z "$RUN_MODE" ]; then
+  ok "proxy process running"
+  skipped "the running mode matches the configured mode" "no runtime record; proxy started by an older version?"
+else
+  ok "proxy process running"
+  if [ "$RUN_MODE" = "$CONFIGURED_MODE" ]; then
+    ok "the running mode matches the configured mode ($RUN_MODE)"
+  else
+    bad "the running mode matches the configured mode" \
+        "config says '$CONFIGURED_MODE' but the proxy was started in '$RUN_MODE' mode; the assertions below describe '$RUN_MODE'. Re-apply with: sudo agentified start"
+  fi
+  if [ "$RUN_FIREWALL" = "applied" ]; then
+    ok "the firewall backstop was applied at start"
+  else
+    bad "the firewall backstop was applied at start" \
+        "the proxy came up with --proxy-only and nothing completed the job; the L3 assertions below say whether any ruleset survives from an earlier start. Fix with: sudo agentified start"
+  fi
+fi
 
 printf '\nagents\n'
 # An agent installed without its profile starts fine and then cannot reach its

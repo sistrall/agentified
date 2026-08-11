@@ -31,3 +31,49 @@ ag_link_home_dir() {
   chown -h "$user" "$link" 2>/dev/null || true
   return 0
 }
+
+# ------------------------------------------------------------ runtime state --
+#
+# What the boundary was *started* with, as opposed to what the config file says
+# it should be. The two differ the moment anyone uses a documented override:
+#
+#   sudo AGENTIFIED_MODE=learn agentified start
+#
+# and `status` used to recompute the mode per invocation, so it kept reporting
+# `enforce` at a proxy that was permitting every host. See docs/adr/0021.
+#
+# The record lives next to the rendered ruleset in /run, because it describes
+# this run of the container and must not outlive it: a stale file claiming
+# `enforce` would be the same lie in a different place.
+
+# ag_render_state MODE FIREWALL DNS_MODE PROFILES ALLOW PORT
+#
+# FIREWALL is `applied` or `deferred` — `start --proxy-only` brings up the L7
+# half and leaves the L3 backstop to postStart, which is a real state to be in
+# and a bad one to mistake for the finished article.
+ag_render_state() {
+  printf 'RUN_MODE=%s\n'     "${1-}"
+  printf 'RUN_FIREWALL=%s\n' "${2-}"
+  printf 'RUN_DNS_MODE=%s\n' "${3-}"
+  printf 'RUN_PROFILES=%s\n' "${4-}"
+  printf 'RUN_ALLOW=%s\n'    "${5-}"
+  printf 'RUN_PORT=%s\n'     "${6-}"
+  return 0
+}
+
+# ag_state_get FILE KEY -- print one value; fail if the file or the key is absent.
+#
+# Parsed by prefix rather than sourced. The values include user-supplied option
+# strings, and this file is read by an unprivileged `status`; `.` on it would
+# turn a profile list into something that executes.
+ag_state_get() {
+  local file="${1-}" key="${2-}" line
+  [ -n "$key" ] || return 1
+  [ -r "$file" ] || return 1
+  while IFS= read -r line; do
+    case "$line" in
+      "$key="*) printf '%s\n' "${line#"$key="}"; return 0 ;;
+    esac
+  done < "$file"
+  return 1
+}

@@ -33,6 +33,7 @@ REMOTE_USER_HOME="${_REMOTE_USER_HOME:-/root}"
 SHARE=/usr/local/share/agentified
 ETC=/etc/agentified
 OPT=/opt/agentified
+STATE="${AGENTIFIED_STATE:-/agent-state}"
 NODE_VERSION=22.20.0
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -276,6 +277,43 @@ export HTTPS_PROXY="http://127.0.0.1:${PROXY_PORT}"
 export NO_PROXY="localhost,127.0.0.1,::1,.local,.internal"
 export no_proxy="\$NO_PROXY"
 EOF
+
+# CLAUDE_CONFIG_DIR is in containerEnv too, and that is what real clients see —
+# but containerEnv only reaches processes the tooling starts. Anything that
+# resets the environment (su -l, cron, sudo -i) loses it and Claude Code
+# silently falls back to ~/.claude, off the state volume and gone at the next
+# rebuild. profile.d survives the reset, for the same reason the proxy
+# variables live here (docs/adr/0009).
+case ",$AGENTS," in
+  *,claude,*)
+    cat >> "$ENVFILE" <<EOF
+export CLAUDE_CONFIG_DIR="${STATE}/claude"
+EOF
+    ;;
+esac
+
+# The variables above point at a proxy that exists only while agentified is
+# running — and a boundary that never started, or that is running in learn
+# mode, exports exactly the same ones. Nothing else the user sees distinguishes
+# those from an enforcing container, so a new shell says which it is.
+#
+# The wording lives in the CLI so `status` and this cannot drift apart. Here:
+# interactive shells only, and its stdout goes to stderr, because this file is
+# also sourced from /etc/zsh/zshenv — which every zsh script reads, and where
+# stdout belongs to scp and rsync. The redirections are ordered so that the
+# message reaches the terminal while the command's own errors are dropped.
+if [ "$MODE" != "off" ]; then
+  cat >> "$ENVFILE" <<EOF
+
+case "\$-" in
+  *i*)
+    if [ -z "\${AGENTIFIED_NO_WARN:-}" ] && command -v agentified >/dev/null 2>&1; then
+      agentified shell-warning >&2 2>/dev/null || true
+    fi
+    ;;
+esac
+EOF
+fi
 chmod 0644 "$ENVFILE"
 
 HOOK=". $ENVFILE  # agentified"

@@ -44,6 +44,8 @@ that?"
 | [0010](0010-write-firewall-rules-as-text.md) | Write the firewall rules as text, then load them in one go |
 | [0011](0011-spell-out-every-allowed-sudo-command.md) | Spell out every command the user is allowed to `sudo` |
 | [0012](0012-block-cloud-metadata-address.md) | Block the cloud metadata address, even for the proxy |
+| [0021](0021-report-what-is-running-not-what-was-configured.md) | Report what is running, not what was configured |
+| [0022](0022-a-boundary-that-did-not-start-must-say-so.md) | A boundary that did not start must say so |
 
 ### Installing the agents
 
@@ -75,7 +77,17 @@ Open questions, written down so they don't get forgotten:
   a real database container alongside and checked.
 - **Does this survive a real editor rebuild?** Our automated tests use the
   headless command line. Nobody has scripted "click Rebuild Container in VS
-  Code" or Zed's "Reopen in Container".
+  Code" or Zed's "Reopen in Container". One consequence of that gap has already
+  been reported from the field: Zed does not run a Feature's lifecycle
+  commands at all, so the boundary never started. See
+  [ADR-0022](0022-a-boundary-that-did-not-start-must-say-so.md).
+- **Can the boundary rearm on boot rather than on lifecycle?** Both known ways
+  of ending up with an inert install — an editor that skips a Feature's
+  lifecycle commands, and a container restarted outside the devcontainer
+  tooling — would be closed by something that comes up with the container
+  itself. There is no init system in a dev container to hang that off, and
+  self-starting from a user shell is a worse trade
+  ([ADR-0022](0022-a-boundary-that-did-not-start-must-say-so.md)).
 - **Do agent logins really survive a rebuild?** We check that the storage volume
   exists and is writable, but no test actually logs into Claude Code, rebuilds,
   and confirms you're still logged in. See
