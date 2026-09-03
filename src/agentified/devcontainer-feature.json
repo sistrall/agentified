@@ -59,7 +59,7 @@
     "installNodeIfMissing": {
       "type": "boolean",
       "default": true,
-      "description": "Install a private Node runtime under /opt/agentified when the image has none new enough for the agents."
+      "description": "Install a private Node runtime under /opt/agentified when Pi is requested and the image has none new enough. Claude Code is a native binary and needs no Node."
     }
   },
 

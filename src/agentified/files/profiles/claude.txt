@@ -16,6 +16,9 @@ platform.claude.com
 api.anthropic.com
 
 # --- updates and plugins --------------------------------------------------
+# Claude Code is installed with its native installer and updates itself from
+# downloads.claude.ai; registry.npmjs.org is for plugins and npx-launched MCP
+# servers, not for Claude Code itself.
 downloads.claude.ai
 registry.npmjs.org
 
@@ -46,5 +49,5 @@ code.claude.com
 #     fall back to api.anthropic.com when it is blocked, and the cost is
 #     install counts missing from /plugin.
 #
-#   formulae.brew.sh                     Homebrew update checks (we install via npm)
+#   formulae.brew.sh                     Homebrew update checks (not how we install)
 #   bridge.claudeusercontent.com         Claude in Chrome (not applicable in a container)

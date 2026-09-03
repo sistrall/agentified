@@ -2,6 +2,12 @@
 
 **Status:** Accepted · **Date:** 2026-08-06 · **Found by:** an integration test
 
+> **Scope since 0.4.0:** this applies to Pi only. Claude Code is no longer
+> installed through npm at all — see
+> [ADR-0023](0023-install-claude-code-natively-so-it-can-update-itself.md). The
+> Claude Code failure described below is kept because it is the clearest
+> example of why `--ignore-scripts` on its own is not enough.
+
 ## The problem
 
 We install the agents with npm. When npm installs a package, that package — and

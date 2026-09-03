@@ -139,6 +139,20 @@ done
 case ",${AGENTS:-}," in
   *,claude,*)
     assert_ok "claude on PATH and executable" "command -v claude >/dev/null && claude --version >/dev/null"
+    # Two installs is the failure mode here (docs/adr/0023): a copy the updater
+    # cannot write, and the copy it made instead, with PATH deciding which one
+    # runs. Every `claude` on PATH has to resolve into the one native install,
+    # and that install has to be the user's to update.
+    assert_ok "every claude on PATH is the one native install" \
+      'for c in $(which -a claude | sort -u); do case "$(readlink -f "$c")" in "$HOME"/.local/share/claude/versions/*) ;; *) echo "$c -> $(readlink -f "$c")"; exit 1 ;; esac; done'
+    assert_ok "claude can update itself (install owned by $REMOTE_USER)" \
+      '[ -w "$HOME/.local/bin" ] && [ -w "$HOME/.local/share/claude/versions" ]'
+    if grep -qs '"installMethod"' "${AGENT_STATE_DIR:-/agent-state}/claude/.claude.json"; then
+      ok "the config records the native install"
+    else
+      bad "the config records the native install" \
+          "no installMethod in /agent-state/claude/.claude.json (a volume from before 0.4.0?) — run \`claude update\` once: it warns, records the key, and does not warn again"
+    fi
     # Read it from the user's environment, not this script's: sudo has already
     # reset the environment that containerEnv populated.
     claude_dir="$(as_user 'echo "${CLAUDE_CONFIG_DIR:-unset}"')"

@@ -241,6 +241,23 @@ link_state() {
     esac
   fi
 
+  # Claude Code was installed with its native installer (docs/adr/0023), and
+  # its updater wants that recorded in the config directory: without the key,
+  # `claude update` warns that the install method is unknown and tells the
+  # user to run `claude install`. A new volume gets the one key; Claude Code
+  # fills in the rest on first start. An existing .claude.json is the user's
+  # — settings, onboarding state, project list — and is not touched. If it
+  # predates 0.4.0, the first `claude update` warns once and records the key
+  # itself; the warning does not come back.
+  case ",$AGENTS," in
+    *,claude,*)
+      if [ ! -e "$root/claude/.claude.json" ] && [ -L "$REMOTE_USER_HOME/.local/bin/claude" ]; then
+        printf '{ "installMethod": "native" }\n' > "$root/claude/.claude.json"
+        chown "$REMOTE_USER" "$root/claude/.claude.json" 2>/dev/null || true
+        chmod 0600 "$root/claude/.claude.json"
+      fi ;;
+  esac
+
   # Claude Code follows CLAUDE_CONFIG_DIR, set in containerEnv and again in
   # /etc/profile.d so it survives an environment reset (su -l, cron).
   # Pi keeps credentials in ~/.pi with no env override, so it needs a symlink.

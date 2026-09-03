@@ -6,6 +6,19 @@ source "$(dirname "$0")/_shared.sh"
 
 check "verify suite"                     sudo agentified verify
 check "claude runs"                      bash -c "claude --version"
+# The install has to be the user's own, and the only one. The npm route left a
+# root-owned copy the updater could not write, and `claude install` — Claude
+# Code's own remedy — then added a second one (docs/adr/0023).
+# shellcheck disable=SC2016  # this is a script for the inner shell to expand, not us
+check "one native claude, owned by the user, not two" \
+                                         bash -c '[ "$(readlink -f /usr/local/bin/claude)" = "$(readlink -f ~/.local/bin/claude)" ] && [ -O "$(readlink -f ~/.local/bin/claude)" ] && [ ! -e /opt/agentified/npm/lib/node_modules/@anthropic-ai/claude-code ]'
+check "no Node runtime was installed just for claude" \
+                                         bash -c '[ ! -d /opt/agentified/node ]'
+# Through the proxy, against the real update host. The two warnings named
+# here are the ones that used to precede the second install.
+# shellcheck disable=SC2016  # this is a script for the inner shell to expand, not us
+check "claude can update itself" \
+                                         bash -c 'out="$(claude update 2>&1)"; echo "$out"; ! echo "$out" | grep -qiE "can.t auto-update|install method"'
 check "claude uses the state volume"     bash -c "[ \"\$CLAUDE_CONFIG_DIR\" = /agent-state/claude ]"
 # The line above only proves the *inherited* environment. containerEnv does not
 # survive anything that resets it — `su -l`, cron, `sudo -i` — and Claude Code

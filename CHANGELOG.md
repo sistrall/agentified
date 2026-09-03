@@ -7,6 +7,34 @@ tags — `0.3.0`, `0.3`, `0` and `latest` — so `:0` follows the newest 0.x and
 While this is 0.x, a minor bump may change behaviour. Read the entry before
 moving `:0`.
 
+## Unreleased
+
+**Fixed**
+
+- **Upgrading Claude Code produced a second installation.** It was installed
+  through npm into a root-owned prefix, so its updater could not write there;
+  Claude Code's own suggested fix, `claude install`, then dropped a native
+  copy under the user's home — and PATH decided which of the two you got.
+  Claude Code is now installed with Anthropic's native installer, as the
+  workspace user, in that user's home, and `/usr/local/bin/claude` is a link
+  to the launcher the updater manages. One copy, and it updates itself. `verify`
+  asserts that every `claude` on PATH resolves into that one install.
+  ([ADR-0023](docs/adr/0023-install-claude-code-natively-so-it-can-update-itself.md))
+
+**Changed**
+
+- **No Node is installed for Claude Code alone.** Claude Code is a native
+  binary. The private Node under `/opt/agentified`, and the npm
+  `--ignore-scripts` arrangement, now apply to Pi only.
+- **The build needs `claude.ai` and `downloads.claude.ai`** instead of
+  `registry.npmjs.org` when installing Claude Code.
+
+**Upgrading from 0.3.0.** Rebuild the container. If you had already run
+`claude install` inside the old one, the stray copy lived in the container's
+filesystem and is gone with the rebuild. The state volume is kept, and if its
+`.claude.json` predates this version, the first `claude update` says the
+install method is unknown, records it, and does not say so again.
+
 ## 0.3.0
 
 Three reports of the boundary lying about itself, all fixed. Nothing about the

@@ -2,11 +2,16 @@
 
 **Status:** Accepted · **Date:** 2026-08-06
 
+> **Scope since 0.4.0:** this applies to Pi only. Claude Code ships as a native
+> binary, needs no Node, and is installed by its own installer — see
+> [ADR-0023](0023-install-claude-code-natively-so-it-can-update-itself.md). With
+> `agents: claude` alone, no Node is installed at all.
+
 ## The problem
 
-Claude Code and Pi are Node.js programs and need a reasonably recent Node (22 or
-newer). Your project might have no Node at all, or an older one that your code
-depends on.
+Pi is a Node.js program (and Claude Code was one, when this was written) and
+needs a reasonably recent Node (22 or newer). Your project might have no Node
+at all, or an older one that your code depends on.
 
 We must not change your project's Node. If your app needs Node 18, upgrading it
 behind your back to install a coding agent would be an unforgivable thing for an

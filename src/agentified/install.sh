@@ -7,8 +7,9 @@
 # directory to link state into.
 #
 # NOTE: this script runs *before* any of the egress rules exist and needs the
-# apt mirrors, nodejs.org and registry.npmjs.org. "Add the Feature and rebuild"
-# assumes unrestricted egress at build time. See README §Limitations.
+# apt mirrors, claude.ai and downloads.claude.ai (Claude Code), and nodejs.org
+# and registry.npmjs.org (Pi). "Add the Feature and rebuild" assumes
+# unrestricted egress at build time. See README §Limitations.
 set -euo pipefail
 
 # If anything upstream exported proxy variables into the build (a corporate
@@ -40,6 +41,17 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { printf '\n[agentified/install] %s\n' "$*"; }
 
+# True when the `agents` option names the given agent.
+wants() { case ",$AGENTS," in *",$1,"*) return 0 ;; esac; return 1; }
+
+# Run a command as the workspace user. Anything that has to live in that
+# user's home — and be writable by them afterwards — is installed this way
+# rather than as root and chowned, so the result is exactly what the user
+# would have got running the same installer themselves.
+as_remote_user() {
+  if [ "$REMOTE_USER" = root ]; then "$@"; else runuser -u "$REMOTE_USER" -- "$@"; fi
+}
+
 # --------------------------------------------------------------- packages ---
 
 log "installing packages"
@@ -57,6 +69,9 @@ rm -f /etc/init.d/tinyproxy 2>/dev/null || true
 
 # ------------------------------------------------------------ private node ---
 
+# Only Pi is a Node program. Claude Code ships as a native binary and is
+# installed below without npm, so `agents: claude` on an image with no Node
+# installs no Node either.
 need_node() {
   local bin major
   bin="$(command -v node || true)"
@@ -67,7 +82,7 @@ need_node() {
 }
 
 NODE_DIR=""
-if [ "$AGENTS" != "none" ] && need_node; then
+if wants pi && need_node; then
   if [ "$INSTALL_NODE_IF_MISSING" != "true" ]; then
     echo "agentified: no Node >= 22 found and installNodeIfMissing=false" >&2
     exit 1
@@ -90,7 +105,50 @@ if [ "$AGENTS" != "none" ] && need_node; then
   export PATH="$NODE_DIR/bin:$PATH"
 fi
 
-# ----------------------------------------------------------------- agents ---
+# ------------------------------------------------------------ claude code ---
+
+# Claude Code is one native binary that updates itself in place — but only
+# somewhere it can write. Installing it through npm, as this Feature used to,
+# left a root-owned copy under /opt that its updater could not touch. Claude
+# Code's own advice at that point is `claude install`, which quietly drops a
+# *second* copy under the user's home; from then on there are two versions
+# and PATH decides which one runs. So: the official native installer, run as
+# the workspace user, into that user's home, once. See docs/adr/0023.
+install_claude() {
+  local tmp launcher
+  log "installing Claude Code (native installer) for $REMOTE_USER"
+  tmp="$(mktemp -d)"
+  chmod 0755 "$tmp"
+  curl -fsSL -o "$tmp/install.sh" https://claude.ai/install.sh
+
+  # The installer records how Claude Code was installed in its config
+  # directory. At build time that must not be the state volume — it is not
+  # mounted yet, and containerEnv already points CLAUDE_CONFIG_DIR at it — so
+  # it gets a scratch one here, and `agentified start` seeds the real one.
+  install -d -m 0700 -o "$REMOTE_USER" "$tmp/config"
+  as_remote_user env -i \
+    HOME="$REMOTE_USER_HOME" USER="$REMOTE_USER" \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    CLAUDE_CONFIG_DIR="$tmp/config" \
+    bash "$tmp/install.sh"
+  rm -rf "$tmp"
+
+  # The installer stages its download under ~/.claude. That is not the config
+  # directory here and must not be left around looking like one.
+  rm -rf "$REMOTE_USER_HOME/.claude/downloads"
+  rmdir "$REMOTE_USER_HOME/.claude" 2>/dev/null || true
+
+  launcher="$REMOTE_USER_HOME/.local/bin/claude"
+  [ -L "$launcher" ] || { echo "agentified: the native installer did not create $launcher" >&2; exit 1; }
+  as_remote_user "$launcher" --version >/dev/null
+
+  # One `claude`, reachable from any PATH. /usr/local/bin holds a link to the
+  # launcher the updater manages, not a copy of its own: after an update both
+  # names still resolve to the same, new, binary.
+  ln -sfn "$launcher" /usr/local/bin/claude
+}
+
+# --------------------------------------------------------------------- pi ---
 
 NPM_PREFIX="$OPT/npm"
 
@@ -98,10 +156,11 @@ NPM_PREFIX="$OPT/npm"
 # arbitrary code during our build, then run the postinstall of the one
 # top-level package we asked for, deliberately and by name.
 #
-# Claude Code needs this: its postinstall fetches the platform-native binary,
-# and without it `claude --version` fails with "native binary not installed".
+# A package whose postinstall does real work is otherwise present but broken:
+# Claude Code, when it was still installed this way, fetched its native binary
+# in postinstall and failed with "native binary not installed" without it.
 # Blanket --ignore-scripts, as the original recipe prescribed, produces a
-# container where the agent is present but cannot start.
+# container where the agent is present but cannot start. See docs/adr/0013.
 install_agent() {
   local pkg="$1"
   log "installing $pkg"
@@ -138,17 +197,17 @@ EOF
   chmod 0755 "/usr/local/bin/$name"
 }
 
-if [ "$AGENTS" != "none" ]; then
+if wants pi; then
   mkdir -p "$NPM_PREFIX"
-  case ",$AGENTS," in *,claude,*) install_agent "@anthropic-ai/claude-code" ;; esac
-  case ",$AGENTS," in *,pi,*)     install_agent "@earendil-works/pi-coding-agent" ;; esac
+  install_agent "@earendil-works/pi-coding-agent"
+  for b in "$NPM_PREFIX"/bin/*; do
+    [ -e "$b" ] || continue
+    wrap_agent_bin "$(basename "$b")" "$b"
+  done
+fi
 
-  if [ -d "$NPM_PREFIX/bin" ]; then
-    for b in "$NPM_PREFIX"/bin/*; do
-      [ -e "$b" ] || continue
-      wrap_agent_bin "$(basename "$b")" "$b"
-    done
-  fi
+if wants claude; then
+  install_claude
 fi
 
 # ------------------------------------------------------------- proxy user ---
