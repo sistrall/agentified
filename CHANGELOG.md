@@ -1,13 +1,13 @@
 # Changelog
 
 Published as `ghcr.io/sistrall/agentified/agentified`. Each release gets four
-tags — `0.3.0`, `0.3`, `0` and `latest` — so `:0` follows the newest 0.x and
-`:0.3` stays on the 0.3 line.
+tags — `0.4.0`, `0.4`, `0` and `latest` — so `:0` follows the newest 0.x and
+`:0.4` stays on the 0.4 line.
 
 While this is 0.x, a minor bump may change behaviour. Read the entry before
 moving `:0`.
 
-## Unreleased
+## 0.4.0
 
 **Fixed**
 
