@@ -54,6 +54,7 @@ that?"
 | [0013](0013-run-only-the-agents-own-install-script.md) | Run only the agent's own install script, not its dependencies' |
 | [0014](0014-private-node-with-wrapper-commands.md) | Give the agents their own Node, and wrap their commands |
 | [0015](0015-agent-logins-in-a-per-project-volume.md) | Keep agent logins in a per-project volume |
+| [0023](0023-install-claude-code-natively-so-it-can-update-itself.md) | Install Claude Code natively, in the user's home, so it can update itself |
 
 ### How we test it
 

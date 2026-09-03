@@ -93,8 +93,8 @@ Add this to the `features` block of your `.devcontainer/devcontainer.json`:
 ```
 
 The trailing `:0` is a version. Each release is published under four tags — for
-`0.3.0` those are `:0.3.0`, `:0.3`, `:0` and `:latest` — so `:0` means "the
-newest 0.x". Pin it tighter with `:0.3.0` if you want to control upgrades
+`0.4.0` those are `:0.4.0`, `:0.4`, `:0` and `:latest` — so `:0` means "the
+newest 0.x". Pin it tighter with `:0.4.0` if you want to control upgrades
 yourself. Either way, commit the `devcontainer-lock.json` the tooling generates:
 that is what makes your teammates and CI build from the identical Feature.
 
@@ -159,6 +159,25 @@ no `NODE_EXTRA_CA_CERTS`, and `npm`, `bundle` and `gh` work on day one.
 More detail: [ADR-0002](docs/adr/0002-two-layers-of-blocking.md),
 [ADR-0003](docs/adr/0003-filter-by-name-not-by-decrypting.md),
 [ADR-0004](docs/adr/0004-only-the-proxy-user-may-leave.md).
+
+## Updating the agents
+
+Claude Code is installed with Anthropic's own native installer, as your
+workspace user, in that user's home. That is the arrangement its updater
+expects: it updates itself in the background, `claude update` works without
+`sudo`, and there is exactly one copy. A rebuild puts you back on whatever
+version was current when the image was built.
+
+Earlier versions of agentified installed it through npm, root-owned, which the
+updater could not write to — and Claude Code's own remedy, `claude install`,
+quietly added a second copy next to it. `sudo agentified verify` now checks
+there is one. If it reports that the config does not record the install method
+— a state volume from before 0.4.0 — run `claude update` once: it warns,
+records the method, and does not warn again.
+[ADR-0023](docs/adr/0023-install-claude-code-natively-so-it-can-update-itself.md).
+
+Pi is installed with npm, with its own Node, and is not self-updating: rebuild
+to get a newer one.
 
 ## Choosing your allowlist
 
@@ -278,7 +297,7 @@ behind the word `enforce`.
 | `proxyPort` | `3128` | Which port the proxy listens on |
 | `allowIpv6` | `false` | IPv6 is closed unless you turn it on |
 | `agentPolicy` | `strict` | Tell the agent the boundary is deliberate, and deny it `sudo` and firewall commands. `notes-only` for the telling without the denying, `off` for neither |
-| `installNodeIfMissing` | `true` | Installs a private Node if the image has none new enough. Your own Node is never touched. |
+| `installNodeIfMissing` | `true` | For Pi: installs a private Node if the image has none new enough. Your own Node is never touched. Claude Code needs no Node. |
 
 ## Commands
 
@@ -332,9 +351,11 @@ people false confidence.
    account is blocked, so `sudo apt-get install` inside a running container goes
    through the proxy or not at all.
 5. **Building the image needs unrestricted internet.** The installer runs before
-   any of the rules exist and needs the package mirrors, `nodejs.org` and
-   `registry.npmjs.org`. "Add the Feature and rebuild" quietly assumes that. If
-   you're on a locked-down corporate network, this is the part that will bite.
+   any of the rules exist and needs the package mirrors, `claude.ai` and
+   `downloads.claude.ai` for Claude Code, and `nodejs.org` and
+   `registry.npmjs.org` for Pi. "Add the Feature and rebuild" quietly assumes
+   that. If you're on a locked-down corporate network, this is the part that
+   will bite.
 6. **DNS could in theory be used as a tunnel** in `resolver-only` mode, if the
    container's DNS server forwards arbitrary queries. `blocked` closes that, at
    the cost of not being able to resolve other containers by name.
