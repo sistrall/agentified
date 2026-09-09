@@ -22,7 +22,7 @@ printf '\n%sagentified demo%s — is the network boundary really there?\n' "$bol
 
 if [ -z "${https_proxy:-}" ]; then
   printf '\n%s✗%s https_proxy is not set in this shell.\n' "$red" "$off"
-  note 'Open a new terminal, or see docs/adr/0009-keep-proxy-settings-out-of-containerenv.md'
+  note 'Open a new terminal, or see docs/adr/0024-put-the-proxy-variables-in-containerenv.md'
   exit 1
 fi
 note "proxy in this shell: $https_proxy"

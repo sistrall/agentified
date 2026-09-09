@@ -13,6 +13,14 @@ check "status is truthful without sudo" bash -c "agentified status | grep -qE '^
 check "status says why the rules are hidden without sudo" \
                                         bash -c "agentified status | grep -q 'readable by root only'"
 check "no agent was installed"          bash -c "! command -v claude && ! command -v pi"
+# The guarantee containerEnv buys, and the one a login-shell probe cannot see:
+# every process gets the proxy, not just the ones the devcontainer tooling
+# starts. A process that misses it egresses directly, is dropped by L3, and
+# leaves `agentified denied` empty — the boundary looks broken rather than
+# narrow (docs/adr/0024). PID 1 carries exactly what `docker run -e` applied;
+# it is root-owned, hence sudo.
+check "the proxy is in the container environment, not only in shells" \
+                                        sudo bash -c "tr '\\0' '\\n' < /proc/1/environ | grep -qx 'https_proxy=http://127.0.0.1:3128'"
 check "extra allow host compiled"       bash -c "sudo agentified hosts | grep -q '\\^rubygems\\\\.org\\$'"
 check "subdomain form compiled"         bash -c "sudo agentified hosts | grep -q '(\\^|\\\\.)example\\\\.org\\$'"
 check "allowed extra host reachable"    curl_proxied https://rubygems.org/

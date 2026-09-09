@@ -40,12 +40,13 @@ that?"
 | # | Decision |
 |---|---|
 | [0008](0008-proxy-early-firewall-late.md) | Start the proxy early, switch the firewall on late |
-| [0009](0009-keep-proxy-settings-out-of-containerenv.md) | Don't put proxy settings in `containerEnv` |
+| [0009](0009-keep-proxy-settings-out-of-containerenv.md) | ~~Don't put proxy settings in `containerEnv`~~ (superseded by 0024) |
 | [0010](0010-write-firewall-rules-as-text.md) | Write the firewall rules as text, then load them in one go |
 | [0011](0011-spell-out-every-allowed-sudo-command.md) | Spell out every command the user is allowed to `sudo` |
 | [0012](0012-block-cloud-metadata-address.md) | Block the cloud metadata address, even for the proxy |
 | [0021](0021-report-what-is-running-not-what-was-configured.md) | Report what is running, not what was configured |
 | [0022](0022-a-boundary-that-did-not-start-must-say-so.md) | A boundary that did not start must say so |
+| [0024](0024-put-the-proxy-variables-in-containerenv.md) | Put the proxy variables in `containerEnv` after all |
 
 ### Installing the agents
 

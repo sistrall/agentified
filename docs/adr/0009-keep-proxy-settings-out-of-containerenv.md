@@ -1,6 +1,22 @@
 # 0009. Don't put proxy settings in `containerEnv`
 
-**Status:** Accepted · **Date:** 2026-08-06 · **Found by:** the first build attempt
+**Status:** Superseded by
+[ADR-0024](0024-put-the-proxy-variables-in-containerenv.md) ·
+**Date:** 2026-08-06 · **Found by:** the first build attempt
+
+> **This record's central claim is wrong, and the decision has been reversed.**
+> `containerEnv` is *not* emitted as `ENV` above the feature install layers. In
+> `@devcontainers/cli` the template has ordered `#{featureLayer}` before
+> `#{containerEnv}` in every release back to v0.25.0, and a **v2** Feature's
+> `containerEnv` is never written as `ENV` at all — it rides the devcontainer
+> metadata label and is applied as `docker run -e` at container start. It cannot
+> reach the build.
+>
+> The reasoning below is kept as written, because the trade-off it describes is
+> the one that was actually made for a year and the `profile.d` machinery it
+> introduced is still in use. Read
+> [ADR-0024](0024-put-the-proxy-variables-in-containerenv.md) for what we do now
+> and why.
 
 ## The problem
 

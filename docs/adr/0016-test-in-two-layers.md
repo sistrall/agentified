@@ -87,9 +87,11 @@ picky:
    separate process and was overwritten by `sort`'s exit status. Invalid hosts
    were dropped and the build passed. See
    [ADR-0006](0006-reject-bad-options-loudly.md).
-2. **Proxy settings in `containerEnv` broke the build itself** — caught the
-   first time an integration scenario ran. See
-   [ADR-0009](0009-keep-proxy-settings-out-of-containerenv.md).
+2. **Proxy settings in `containerEnv` appeared to break the build itself** —
+   caught the first time an integration scenario ran. The layer did its job:
+   something really did fail. The diagnosis did not survive a later read of the
+   devcontainer CLI source, and the decision it produced has since been
+   reversed. See [ADR-0024](0024-put-the-proxy-variables-in-containerenv.md).
 3. **The agent installed but couldn't start** — caught because `verify` runs
    `claude --version` instead of just checking the command exists. See
    [ADR-0013](0013-run-only-the-agents-own-install-script.md).
