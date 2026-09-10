@@ -361,10 +361,13 @@ people false confidence.
    the cost of not being able to resolve other containers by name.
 7. **The proxy trusts the name it's given.** A program that asks for one site
    and then talks to another isn't caught.
-8. **Proxy settings come from a shell startup file, not `containerEnv`** — for
-   a good reason ([ADR-0009](docs/adr/0009-keep-proxy-settings-out-of-containerenv.md)).
-   If you set `"userEnvProbe": "none"` in your `devcontainer.json`, your tools
-   won't see them. `verify` checks this explicitly and tells you.
+8. **The proxy variables advertise port 3128 and can't be told otherwise.**
+   They're set in the Feature's `containerEnv`, so every process gets them
+   ([ADR-0024](docs/adr/0024-put-the-proxy-variables-in-containerenv.md)) — but
+   a Feature option can't be substituted there. On a non-default `proxyPort`,
+   shells read the real port from `/etc/profile.d` and anything that doesn't
+   read it gets 3128. The build prints the `containerEnv` block to paste into
+   your `devcontainer.json`, and `verify` names the mismatch.
 9. **Some tooling never runs the Feature's lifecycle commands, and then the
    boundary never starts.** agentified brings itself up through the
    `onCreateCommand` and `postStartCommand` it declares. **Zed** (through 1.14)

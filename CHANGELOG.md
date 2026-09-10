@@ -7,6 +7,43 @@ tags — `0.4.0`, `0.4`, `0` and `latest` — so `:0` follows the newest 0.x and
 While this is 0.x, a minor bump may change behaviour. Read the entry before
 moving `:0`.
 
+## Unreleased
+
+**Fixed**
+
+- **Anything that didn't read a shell startup file never saw the proxy.** The
+  proxy variables were exported only from `/etc/profile.d/90-agentified.sh` and
+  relied on `userEnvProbe` to travel further. That covers the processes the
+  devcontainer tooling starts, and nothing else — so under tooling that skips
+  the probe the traffic went direct and was dropped by the firewall, leaving
+  `agentified denied` **empty**. The boundary read as broken rather than as
+  missing a domain. Zed is a concrete case: it applies a Feature's
+  `containerEnv` and ignores its lifecycle commands. The four proxy variables
+  are now in the Feature's `containerEnv`, where every process gets them.
+  ([ADR-0024](docs/adr/0024-put-the-proxy-variables-in-containerenv.md))
+
+**Changed**
+
+- **[ADR-0009](docs/adr/0009-keep-proxy-settings-out-of-containerenv.md) is
+  superseded.** Its central claim — that `containerEnv` is emitted as `ENV`
+  above the feature install layers — does not hold: `@devcontainers/cli` has
+  ordered `#{featureLayer}` before `#{containerEnv}` in every release back to
+  v0.25.0, and a v2 Feature's `containerEnv` is never written as `ENV` at all.
+  It rides the metadata label and is applied as `docker run -e` at start, so it
+  cannot reach the build.
+- **`verify` asserts the container environment as well as the login shell.**
+  They fail independently, and the login-shell probe could never see the case
+  above. The new check reads `/proc/1/environ`.
+- **`/etc/profile.d/90-agentified.sh` stays.** It carries the configured
+  `proxyPort`, which `containerEnv` cannot express, and it survives an
+  environment reset (`su -l`, `cron`, `sudo -i`), which `containerEnv` does not.
+
+**Upgrading.** Rebuild the container. If you set a non-default `proxyPort`, the
+build now warns and prints a `containerEnv` block to add to your
+`devcontainer.json`: `containerEnv` hardcodes 3128 because a Feature option
+cannot be substituted into it, and your config merges after the Feature's, so
+your override wins.
+
 ## 0.4.0
 
 **Fixed**

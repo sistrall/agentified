@@ -232,16 +232,33 @@ case "${AGENT_POLICY:-strict}" in
 esac
 
 printf '\nproxy environment\n'
-# The proxy variables come from /etc/profile.d rather than containerEnv (see
-# docs/adr/0009-keep-proxy-settings-out-of-containerenv.md). If userEnvProbe has
-# been turned off, clients will not see them and everything will silently
-# egress-fail instead of being proxied.
+# Two guarantees, asserted separately because they fail independently.
+#
+# 1. The container environment, from containerEnv (docs/adr/0024). This is what
+#    every process gets, including the ones the devcontainer tooling never
+#    starts: editor servers, the language servers they spawn, ACP agents. PID 1
+#    is the honest place to read it — it was started with exactly the
+#    environment `docker run -e` applied, and sudo has stripped ours by now.
+cenv_proxy="$(tr '\0' '\n' < /proc/1/environ 2>/dev/null | sed -n 's/^https_proxy=//p' | head -1)"
+if [ "$cenv_proxy" = "$PROXY" ]; then
+  ok "https_proxy in the container environment ($cenv_proxy)"
+elif [ -z "$cenv_proxy" ]; then
+  bad "https_proxy in the container environment" \
+      "unset for PID 1. Anything the tooling does not start egresses directly and is dropped by the firewall, leaving 'agentified denied' empty — a missing domain that reads as a broken container"
+else
+  bad "https_proxy in the container environment" \
+      "got '$cenv_proxy' but the proxy is on $PROXY. containerEnv hardcodes port 3128 and cannot read proxyPort; override the four proxy variables in your devcontainer.json containerEnv"
+fi
+
+# 2. The login shell, from /etc/profile.d. This is the one that carries the
+#    *configured* port, and the one that survives an environment reset (su -l,
+#    cron, sudo -i) — which containerEnv does not.
 probe_env="$(as_user 'echo "${https_proxy:-unset}"')"
-if [ "$probe_env" = "http://127.0.0.1:$PROXY_PORT" ]; then
+if [ "$probe_env" = "$PROXY" ]; then
   ok "https_proxy visible in a login shell ($probe_env)"
 else
   bad "https_proxy visible in a login shell" \
-      "got '$probe_env'; set userEnvProbe to loginInteractiveShell, or add remoteEnv"
+      "got '$probe_env'; /etc/profile.d/90-agentified.sh should export it"
 fi
 
 printf '\nstate volume\n'

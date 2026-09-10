@@ -75,17 +75,29 @@
     }
   ],
 
-  // http_proxy and friends are deliberately NOT set here. containerEnv is
-  // emitted as ENV in the generated Dockerfile, *above* the feature install
-  // layers, so pinning the proxy here points every build-time apt/curl/npm —
-  // ours and that of any feature installed afterwards — at a port that does not
-  // exist until runtime. They are written to /etc/profile.d instead and picked
-  // up at runtime through userEnvProbe.
-  // See docs/adr/0009-keep-proxy-settings-out-of-containerenv.md.
+  // A v2 Feature's containerEnv is never emitted as ENV in the generated
+  // Dockerfile: it travels in the devcontainer metadata label and is applied as
+  // `docker run -e` at container start. Runtime only, so it cannot reach the
+  // build — and it reaches every process, not just the ones the tooling starts.
+  // That is what the proxy variables need. userEnvProbe covers the editor
+  // server but nothing under tooling that skips the probe, and Zed applies
+  // containerEnv while ignoring lifecycle commands entirely (ADR-0022).
+  //
+  // The port is hardcoded because a Feature option cannot be substituted here.
+  // With a non-default proxyPort, override these four in your own
+  // devcontainer.json containerEnv — config metadata merges after Feature
+  // metadata, so yours wins. install.sh warns when that applies to you, and
+  // verify names the mismatch.
+  // See docs/adr/0024-put-the-proxy-variables-in-containerenv.md.
   "containerEnv": {
     "AGENTIFIED_HOME": "/usr/local/share/agentified",
     "AGENTIFIED_STATE": "/agent-state",
     "CLAUDE_CONFIG_DIR": "/agent-state/claude",
+
+    "http_proxy": "http://127.0.0.1:3128",
+    "https_proxy": "http://127.0.0.1:3128",
+    "HTTP_PROXY": "http://127.0.0.1:3128",
+    "HTTPS_PROXY": "http://127.0.0.1:3128",
 
     "NO_PROXY": "localhost,127.0.0.1,::1,.local,.internal",
     "no_proxy": "localhost,127.0.0.1,::1,.local,.internal"
