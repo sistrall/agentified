@@ -93,8 +93,8 @@ Add this to the `features` block of your `.devcontainer/devcontainer.json`:
 ```
 
 The trailing `:0` is a version. Each release is published under four tags — for
-`0.4.0` those are `:0.4.0`, `:0.4`, `:0` and `:latest` — so `:0` means "the
-newest 0.x". Pin it tighter with `:0.4.0` if you want to control upgrades
+`0.5.0` those are `:0.5.0`, `:0.5`, `:0` and `:latest` — so `:0` means "the
+newest 0.x". Pin it tighter with `:0.5.0` if you want to control upgrades
 yourself. Either way, commit the `devcontainer-lock.json` the tooling generates:
 that is what makes your teammates and CI build from the identical Feature.
 
