@@ -1,13 +1,13 @@
 # Changelog
 
 Published as `ghcr.io/sistrall/agentified/agentified`. Each release gets four
-tags — `0.4.0`, `0.4`, `0` and `latest` — so `:0` follows the newest 0.x and
-`:0.4` stays on the 0.4 line.
+tags — `0.5.0`, `0.5`, `0` and `latest` — so `:0` follows the newest 0.x and
+`:0.5` stays on the 0.5 line.
 
 While this is 0.x, a minor bump may change behaviour. Read the entry before
 moving `:0`.
 
-## Unreleased
+## 0.5.0
 
 **Fixed**
 
@@ -38,7 +38,7 @@ moving `:0`.
   `proxyPort`, which `containerEnv` cannot express, and it survives an
   environment reset (`su -l`, `cron`, `sudo -i`), which `containerEnv` does not.
 
-**Upgrading.** Rebuild the container. If you set a non-default `proxyPort`, the
+**Upgrading from 0.4.0.** Rebuild the container. If you set a non-default `proxyPort`, the
 build now warns and prints a `containerEnv` block to add to your
 `devcontainer.json`: `containerEnv` hardcodes 3128 because a Feature option
 cannot be substituted into it, and your config merges after the Feature's, so
