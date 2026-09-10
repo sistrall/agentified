@@ -36,9 +36,16 @@ as `ENV` at all**. It travels in the devcontainer metadata label, is merged in
 (`src/spec-node/singleContainer.ts`). Runtime only. It cannot reach the build.
 
 Whatever produced the build failure quoted in ADR-0009, it was not this, under
-this tooling. The most likely explanation is that it was observed through the
-VS Code Dev Containers extension, a separate closed-source implementation whose
-generated Dockerfile we cannot inspect.
+this tooling. The obvious remaining suspect was the VS Code Dev Containers
+extension — a separate, closed-source implementation whose generated Dockerfile
+we cannot read. So it was checked by hand: with the proxy variables in
+`containerEnv`, the `example/` container builds and runs under VS Code's
+"Reopen in Container" (2026-09-10).
+
+That explanation does not hold either, and **the original failure stays
+unexplained**. It is left standing here rather than papered over: something did
+fail, once, and we still cannot say what. If it resurfaces, this is the record
+to reopen.
 
 **`userEnvProbe` does not cover what we claimed.** It covers a lot: the probe
 result becomes `remoteEnv` and does reach the editor server and the language
@@ -128,3 +135,11 @@ The first reads `/proc/1/environ`. PID 1 was started with exactly the
 environment `docker run -e` applied, and `sudo` has stripped `verify`'s own by
 the time it runs — so this is the honest place to read the container
 environment, and it is what the old login-shell probe could never see.
+
+`boundary_only` carries the same assertion as a scenario check, and all nine
+scenarios pass with the change.
+
+No scenario can reach a real editor build, so that part was done by hand: VS
+Code's "Reopen in Container" on `example/`, which works. Zed is still covered
+only by the field report that prompted this record — it is the case the change
+is *for*, and the one we can least easily test.

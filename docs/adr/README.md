@@ -78,11 +78,15 @@ Open questions, written down so they don't get forgotten:
   the agent reach it. The option is tested, but we have never actually stood up
   a real database container alongside and checked.
 - **Does this survive a real editor rebuild?** Our automated tests use the
-  headless command line. Nobody has scripted "click Rebuild Container in VS
-  Code" or Zed's "Reopen in Container". One consequence of that gap has already
-  been reported from the field: Zed does not run a Feature's lifecycle
-  commands at all, so the boundary never started. See
-  [ADR-0022](0022-a-boundary-that-did-not-start-must-say-so.md).
+  headless command line. Nobody has *scripted* "click Rebuild Container in VS
+  Code" or Zed's "Reopen in Container", so nothing guards it between releases —
+  VS Code was checked by hand once, for
+  [ADR-0024](0024-put-the-proxy-variables-in-containerenv.md), and Zed not at
+  all. Two consequences of that gap have already been reported from the field:
+  Zed does not run a Feature's lifecycle commands, so the boundary never
+  started ([ADR-0022](0022-a-boundary-that-did-not-start-must-say-so.md)), and
+  it never saw the proxy settings either
+  ([ADR-0024](0024-put-the-proxy-variables-in-containerenv.md)).
 - **Can the boundary rearm on boot rather than on lifecycle?** Both known ways
   of ending up with an inert install — an editor that skips a Feature's
   lifecycle commands, and a container restarted outside the devcontainer
